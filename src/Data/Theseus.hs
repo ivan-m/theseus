@@ -23,7 +23,12 @@
    5) 'unravel' the 'ByteString' to get your data back.
 
  -}
-module Data.Theseus where
+module Data.Theseus
+  ( ravel
+  , unravel
+  , Theseus
+  , TheseusException (..)
+  ) where
 
 import Data.Theseus.Values
 
@@ -45,7 +50,6 @@ ravel a = B.unsafeCreate sz $ \p ->
   encodeValue p 0 a
   where
     sz = sizeOfValue a
-
 
 -- | Separate out the individual bytes from a ByteString and try to
 --   construct a value out of it.
