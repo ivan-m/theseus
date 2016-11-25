@@ -13,6 +13,7 @@
 module Data.Theseus.Values where
 
 import           Control.Arrow            (first)
+import           Data.Bool                (bool)
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as B
@@ -169,9 +170,32 @@ instance Theseus ByteString where
   encodeValue = pokeByteStringOff
   {-# INLINE encodeValue #-}
 
+instance Theseus () where
+  sizeOfValue = sizeOf
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue _ _ _ o = return ((),o)
+  {-# INLINE decodeValue #-}
+
+  encodeValue _ _ _ = return ()
+  {-# INLINE encodeValue #-}
+
 instance (Theseus a, Theseus b) => Theseus (a,b)
 instance (Theseus a, Theseus b, Theseus c) => Theseus (a,b,c)
 instance (Theseus a, Theseus b, Theseus c, Theseus d) => Theseus (a,b,c,d)
+
+falseWord8 :: Word8
+falseWord8 = 0
+
+instance Theseus Bool where
+  sizeOfValue = const (sizeOfValue falseWord8)
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc b p o = first (/= falseWord8) <$> decodeValue lc b p o
+  {-# INLINE decodeValue #-}
+
+  encodeValue p o = encodeValue p o . bool falseWord8 1
+  {-# INLINE encodeValue #-}
 
 --------------------------------------------------------------------------------
 
@@ -242,5 +266,5 @@ pokeByteStringOff dptr doff s = do
 -- | Takes offset and size
 substr :: Int -> Int -> ByteString -> ByteString
 substr off sz s
-  | (sz == 0) = B.empty
+  | sz == 0   = B.empty
   | otherwise = B.take sz . B.drop off $ s
