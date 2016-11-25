@@ -129,7 +129,7 @@ instance (GValue f, GValue g) => GValue (f :*: g) where
   gSizeOfValue (a :*: b) = gSizeOfValue a + gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue lc b p o = do (a,o')  <- gDecodeValue lc b p o
+  gDecodeValue lc b p o = do (a,o') <- gDecodeValue lc b p o
                              first (a :*:) <$> gDecodeValue lc b p o'
   {-# INLINE gDecodeValue #-}
 
