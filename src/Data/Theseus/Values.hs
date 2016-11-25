@@ -1,5 +1,6 @@
-{-# LANGUAGE DefaultSignatures, FlexibleContexts, TupleSections, TypeOperators
-             #-}
+{-# LANGUAGE CPP, DefaultSignatures, FlexibleContexts, TupleSections,
+             TypeOperators #-}
+
 {- |
    Module      : Data.Theseus.Values
    Description : How to store individual values
@@ -49,109 +50,40 @@ class Theseus a where
   encodeValue p o = gEncodeValue p o . from
   {-# INLINE encodeValue #-}
 
-instance Theseus Int8 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
+#define THESEUS(T)                                          \
+instance Theseus  (T) where {                               \
+  sizeOfValue = sizeOf;                                     \
+  {-# INLINE sizeOfValue #-};                               \
+                                                            \
+  decodeValue lc _ p o = do { lc olen ;                     \
+                              (,olen) <$> peekByteOff p o } \
+    where {                                                 \
+      olen = o + sizeOf (0::T) };                           \
+  {-# INLINE decodeValue #-} ;                              \
+                                                            \
+  encodeValue = pokeByteOff ;                               \
+  {-# INLINE encodeValue #-}                                \
+}
 
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Int8)
-  {-# INLINE decodeValue #-}
+THESEUS(Int8)
 
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
+THESEUS(Int16)
 
-instance Theseus Int16 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
+THESEUS(Int32)
 
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Int16)
-  {-# INLINE decodeValue #-}
+THESEUS(Int64)
 
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
+THESEUS(Word8)
 
-instance Theseus Int32 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
+THESEUS(Word16)
 
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Int32)
-  {-# INLINE decodeValue #-}
+THESEUS(Word32)
 
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
+THESEUS(Word64)
 
-instance Theseus Int64 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
+THESEUS(Double)
 
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Int64)
-  {-# INLINE decodeValue #-}
-
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
-
-instance Theseus Word8 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Word8)
-  {-# INLINE decodeValue #-}
-
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
-
-instance Theseus Word16 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Word16)
-  {-# INLINE decodeValue #-}
-
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
-
-instance Theseus Word32 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Word32)
-  {-# INLINE decodeValue #-}
-
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
-
-instance Theseus Word64 where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue lc _ p o = do lc olen
-                            (,olen) <$> peekByteOff p o
-    where
-      olen = o + sizeOf (0::Word64)
-  {-# INLINE decodeValue #-}
-
-  encodeValue = pokeByteOff
-  {-# INLINE encodeValue #-}
+THESEUS(Float)
 
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
