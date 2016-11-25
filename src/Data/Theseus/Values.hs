@@ -29,26 +29,26 @@ import           GHC.Generics
 -- | (offset + required length) (i.e. offset of next argument)
 type LenCheck = Int -> IO ()
 
-class TheseusValue a where
+class Theseus a where
   sizeOfValue :: a -> Int
-  default sizeOfValue :: (Generic a, GValue (Rep a)) => a -> Int
+  default sizeOfValue :: (Generic a, GTheseus (Rep a)) => a -> Int
   sizeOfValue = gSizeOfValue . from
   {-# INLINE sizeOfValue #-}
 
   -- | Int argument is offset; returns length
   decodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
-  default decodeValue :: (Generic a, GValue (Rep a))
+  default decodeValue :: (Generic a, GTheseus (Rep a))
                          => LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
   decodeValue lc b p o = first to <$> gDecodeValue lc b p o
   {-# INLINE decodeValue #-}
 
   -- | Takes offset
   encodeValue :: Ptr x -> Int -> a -> IO ()
-  default encodeValue :: (Generic a, GValue (Rep a)) => Ptr x -> Int -> a -> IO ()
+  default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> Int -> a -> IO ()
   encodeValue p o = gEncodeValue p o . from
   {-# INLINE encodeValue #-}
 
-instance TheseusValue Int8 where
+instance Theseus Int8 where
   sizeOfValue = sizeOf
   {-# INLINE sizeOfValue #-}
 
@@ -61,7 +61,7 @@ instance TheseusValue Int8 where
   encodeValue = pokeByteOff
   {-# INLINE encodeValue #-}
 
-instance TheseusValue Int16 where
+instance Theseus Int16 where
   sizeOfValue = sizeOf
   {-# INLINE sizeOfValue #-}
 
@@ -74,7 +74,7 @@ instance TheseusValue Int16 where
   encodeValue = pokeByteOff
   {-# INLINE encodeValue #-}
 
-instance TheseusValue Int32 where
+instance Theseus Int32 where
   sizeOfValue = sizeOf
   {-# INLINE sizeOfValue #-}
 
@@ -87,7 +87,7 @@ instance TheseusValue Int32 where
   encodeValue = pokeByteOff
   {-# INLINE encodeValue #-}
 
-instance TheseusValue Int64 where
+instance Theseus Int64 where
   sizeOfValue = sizeOf
   {-# INLINE sizeOfValue #-}
 
@@ -100,7 +100,7 @@ instance TheseusValue Int64 where
   encodeValue = pokeByteOff
   {-# INLINE encodeValue #-}
 
-instance TheseusValue ByteString where
+instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
 
@@ -119,13 +119,13 @@ instance TheseusValue ByteString where
 
 --------------------------------------------------------------------------------
 
-class GValue f where
+class GTheseus f where
   gSizeOfValue :: f a -> Int
   gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
   gEncodeValue :: Ptr x -> Int -> f a -> IO ()
 
 -- Product type
-instance (GValue f, GValue g) => GValue (f :*: g) where
+instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
   gSizeOfValue (a :*: b) = gSizeOfValue a + gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
@@ -138,7 +138,7 @@ instance (GValue f, GValue g) => GValue (f :*: g) where
   {-# INLINE gEncodeValue #-}
 
 -- Equivalent to a single value.
-instance (TheseusValue c) => GValue (K1 i c) where
+instance (Theseus c) => GTheseus (K1 i c) where
   gSizeOfValue = sizeOfValue . unK1
   {-# INLINE gSizeOfValue #-}
 
@@ -149,7 +149,7 @@ instance (TheseusValue c) => GValue (K1 i c) where
   {-# INLINE gEncodeValue #-}
 
 -- Meta-information
-instance (GValue f) => GValue (M1 i t f) where
+instance (GTheseus f) => GTheseus (M1 i t f) where
   gSizeOfValue = gSizeOfValue . unM1
   {-# INLINE gSizeOfValue #-}
 

@@ -14,7 +14,7 @@
    1) Create a <https://wiki.haskell.org/GHC.Generics Generics>
       instance (@-XDeriveGeneric@ can help with this)
 
-   2) Derive an instance of 'TheseusValue' (@-XDeriveAnyClass@ can be used for this)
+   2) Derive an instance of 'Theseus' (@-XDeriveAnyClass@ can be used for this)
 
    3) 'ravel' your data to encode it as a 'ByteString'.
 
@@ -40,7 +40,7 @@ import System.IO.Unsafe   (unsafeDupablePerformIO)
 --------------------------------------------------------------------------------
 
 -- | Pull apart a value and convert it to a ByteString.
-ravel :: (TheseusValue a) => a -> ByteString
+ravel :: (Theseus a) => a -> ByteString
 ravel a = B.unsafeCreate sz $ \p ->
   encodeValue p 0 a
   where
@@ -49,7 +49,7 @@ ravel a = B.unsafeCreate sz $ \p ->
 
 -- | Separate out the individual bytes from a ByteString and try to
 --   construct a value out of it.
-unravel :: (TheseusValue a) => ByteString -> Either TheseusException a
+unravel :: (Theseus a) => ByteString -> Either TheseusException a
 unravel bs = unsafeDupablePerformIO . try . withForeignPtr fp $ \p ->
   let p' = plusPtr p off
   in fst <$> decodeValue lc bs p' 0
