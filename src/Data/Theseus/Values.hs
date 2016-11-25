@@ -100,6 +100,58 @@ instance Theseus Int64 where
   encodeValue = pokeByteOff
   {-# INLINE encodeValue #-}
 
+instance Theseus Word8 where
+  sizeOfValue = sizeOf
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc _ p o = do lc olen
+                            (,olen) <$> peekByteOff p o
+    where
+      olen = o + sizeOf (0::Word8)
+  {-# INLINE decodeValue #-}
+
+  encodeValue = pokeByteOff
+  {-# INLINE encodeValue #-}
+
+instance Theseus Word16 where
+  sizeOfValue = sizeOf
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc _ p o = do lc olen
+                            (,olen) <$> peekByteOff p o
+    where
+      olen = o + sizeOf (0::Word16)
+  {-# INLINE decodeValue #-}
+
+  encodeValue = pokeByteOff
+  {-# INLINE encodeValue #-}
+
+instance Theseus Word32 where
+  sizeOfValue = sizeOf
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc _ p o = do lc olen
+                            (,olen) <$> peekByteOff p o
+    where
+      olen = o + sizeOf (0::Word32)
+  {-# INLINE decodeValue #-}
+
+  encodeValue = pokeByteOff
+  {-# INLINE encodeValue #-}
+
+instance Theseus Word64 where
+  sizeOfValue = sizeOf
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc _ p o = do lc olen
+                            (,olen) <$> peekByteOff p o
+    where
+      olen = o + sizeOf (0::Word64)
+  {-# INLINE decodeValue #-}
+
+  encodeValue = pokeByteOff
+  {-# INLINE encodeValue #-}
+
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
@@ -116,6 +168,10 @@ instance Theseus ByteString where
 
   encodeValue = pokeByteStringOff
   {-# INLINE encodeValue #-}
+
+instance (Theseus a, Theseus b) => Theseus (a,b)
+instance (Theseus a, Theseus b, Theseus c) => Theseus (a,b,c)
+instance (Theseus a, Theseus b, Theseus c, Theseus d) => Theseus (a,b,c,d)
 
 --------------------------------------------------------------------------------
 
