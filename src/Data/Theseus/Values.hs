@@ -129,8 +129,11 @@ instance (Theseus a, Theseus b, Theseus c, Theseus d) => Theseus (a,b,c,d)
 falseWord8 :: Word8
 falseWord8 = 0
 
+sizeWord8 :: Int
+sizeWord8 = sizeOfValue falseWord8
+
 instance Theseus Bool where
-  sizeOfValue = const (sizeOfValue falseWord8)
+  sizeOfValue = const sizeWord8
   {-# INLINE sizeOfValue #-}
 
   decodeValue lc b p o = first (/= falseWord8) <$> decodeValue lc b p o
@@ -139,47 +142,100 @@ instance Theseus Bool where
   encodeValue p o = encodeValue p o . bool falseWord8 1
   {-# INLINE encodeValue #-}
 
+instance (Theseus a, Theseus b) => Theseus (Either a b)
+
 --------------------------------------------------------------------------------
 
+-- | These take an extra parameter when encoding\/decoding sum types
+--   (i.e. more than one possible constructor).  It is assumed that no
+--   type will have more than @256@ constructors.
 class GTheseus f where
   gSizeOfValue :: f a -> Int
-  gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
-  gEncodeValue :: Ptr x -> Int -> f a -> IO ()
+  gDecodeValue' :: Word8 -> LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+  gEncodeValue' :: Word8 -> Ptr x -> Int -> f a -> IO ()
+
+gDecodeValue :: (GTheseus f) => LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+gDecodeValue = gDecodeValue' 0
+{-# INLINE gDecodeValue #-}
+
+gEncodeValue :: (GTheseus f) => Ptr x -> Int -> f a -> IO ()
+gEncodeValue = gEncodeValue' 0
+{-# INLINE gEncodeValue #-}
 
 -- Product type
 instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
   gSizeOfValue (a :*: b) = gSizeOfValue a + gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue lc b p o = do (a,o') <- gDecodeValue lc b p o
-                             first (a :*:) <$> gDecodeValue lc b p o'
-  {-# INLINE gDecodeValue #-}
+  gDecodeValue' _ lc b p o = do (a,o') <- gDecodeValue lc b p o
+                                first (a :*:) <$> gDecodeValue lc b p o'
+  {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue p o (a :*: b) = gEncodeValue p o a
-                               *> gEncodeValue p (o + gSizeOfValue a) b
-  {-# INLINE gEncodeValue #-}
+  gEncodeValue' _ p o (a :*: b) = gEncodeValue p o a
+                                  *> gEncodeValue p (o + gSizeOfValue a) b
+  {-# INLINE gEncodeValue' #-}
+
+-- Nested sum type
+instance (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: (g :+: h)) where
+  gSizeOfValue = (sizeWord8 +) . go
+    where
+      go (L1 a) = gSizeOfValue a
+      go (R1 b) = gSizeOfValue b
+  {-# INLINE gSizeOfValue #-}
+
+  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
+                                if (c == c')
+                                   then -- This is the correct constructor
+                                        first L1 <$> gDecodeValue lc b p o'
+                                   else first R1 <$> gDecodeValue' (c+1) lc b p o
+                                        -- Using original offset!
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' c p o (L1 a) = encodeValue p o c *> gEncodeValue p (o + sizeWord8) a
+  gEncodeValue' c p o (R1 b) = let c1 = c + 1
+                               in c1 `seq` gEncodeValue' c1 p o b
+  {-# INLINE gEncodeValue' #-}
+
+instance {-# OVERLAPPABLE #-} (GTheseus f, GTheseus g) => GTheseus (f :+: g) where
+  gSizeOfValue = (sizeWord8 +) . go
+    where
+      go (L1 a) = gSizeOfValue a
+      go (R1 b) = gSizeOfValue b
+  {-# INLINE gSizeOfValue #-}
+
+  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
+                                if (c == c')
+                                   then -- This is the correct constructor
+                                        first L1 <$> gDecodeValue lc b p o'
+                                   else first R1 <$> gDecodeValue lc b p o'
+                                        -- Last constructor, who cares what the code is
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' c p o (L1 a) = encodeValue p o c     *> gEncodeValue p (o + sizeWord8) a
+  gEncodeValue' c p o (R1 b) = encodeValue p o (c+1) *> gEncodeValue p (o + sizeWord8) b
+  {-# INLINE gEncodeValue' #-}
 
 -- Equivalent to a single value.
 instance (Theseus c) => GTheseus (K1 i c) where
   gSizeOfValue = sizeOfValue . unK1
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue lc b p o = first K1 <$> decodeValue lc b p o
-  {-# INLINE gDecodeValue #-}
+  gDecodeValue' _ lc b p o = first K1 <$> decodeValue lc b p o
+  {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue p o = encodeValue p o . unK1
-  {-# INLINE gEncodeValue #-}
+  gEncodeValue' _ p o = encodeValue p o . unK1
+  {-# INLINE gEncodeValue' #-}
 
 -- Meta-information
 instance (GTheseus f) => GTheseus (M1 i t f) where
   gSizeOfValue = gSizeOfValue . unM1
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue lc b p o = first M1 <$> gDecodeValue lc b p o
-  {-# INLINE gDecodeValue #-}
+  gDecodeValue' _ lc b p o = first M1 <$> gDecodeValue lc b p o
+  {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue p o = gEncodeValue p o . unM1
-  {-# INLINE gEncodeValue #-}
+  gEncodeValue' _ p o = gEncodeValue p o . unM1
+  {-# INLINE gEncodeValue' #-}
 
 --------------------------------------------------------------------------------
 
