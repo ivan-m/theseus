@@ -92,6 +92,8 @@ THESEUS_E(Double)
 
 THESEUS_E(Float)
 
+THESEUS(Char)
+
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
