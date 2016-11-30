@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP, DefaultSignatures, FlexibleContexts, TupleSections,
              TypeOperators #-}
 
@@ -25,6 +26,7 @@ import           Foreign.Marshal.Array
 import           Foreign.Ptr
 import           Foreign.Storable
 import           GHC.Generics
+import           Data.Storable.Endian
 
 --------------------------------------------------------------------------------
 
@@ -101,6 +103,7 @@ instance Theseus ByteString where
                             -- set, then we have the actual
                             -- ByteString here.
                             let olen = odata + len
+                            lc olen
                             pure (substr odata len b, olen)
   {-# INLINE decodeValue #-}
 
