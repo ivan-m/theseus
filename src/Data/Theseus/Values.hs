@@ -51,39 +51,44 @@ class Theseus a where
   {-# INLINE encodeValue #-}
 
 #define THESEUS(T)                                          \
-instance Theseus  (T) where {                               \
+instance Theseus (T) where {                                \
   sizeOfValue = sizeOf;                                     \
   {-# INLINE sizeOfValue #-};                               \
                                                             \
   decodeValue lc _ p o = do { lc olen ;                     \
                               (,olen) <$> peekByteOff p o } \
     where {                                                 \
-      olen = o + sizeOf (0::T) };                           \
+      olen = o + sizeOf (undefined::(T)) };                 \
   {-# INLINE decodeValue #-} ;                              \
                                                             \
   encodeValue = pokeByteOff ;                               \
   {-# INLINE encodeValue #-}                                \
 }
 
+#define THESEUS_E(T)     \
+THESEUS(T);              \
+THESEUS(LittleEndian T); \
+THESEUS(BigEndian T);    \
+
 THESEUS(Int8)
 
-THESEUS(Int16)
+THESEUS_E(Int16)
 
-THESEUS(Int32)
+THESEUS_E(Int32)
 
-THESEUS(Int64)
+THESEUS_E(Int64)
 
 THESEUS(Word8)
 
-THESEUS(Word16)
+THESEUS_E(Word16)
 
-THESEUS(Word32)
+THESEUS_E(Word32)
 
-THESEUS(Word64)
+THESEUS_E(Word64)
 
-THESEUS(Double)
+THESEUS_E(Double)
 
-THESEUS(Float)
+THESEUS_E(Float)
 
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
