@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE CPP, DefaultSignatures, FlexibleContexts, TupleSections,
-             TypeOperators #-}
+{-# LANGUAGE CPP, DefaultSignatures, FlexibleContexts, FlexibleInstances,
+             TupleSections, TypeOperators #-}
 
 {- |
    Module      : Data.Theseus.Values
@@ -19,13 +18,13 @@ import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as B
 import           Data.Int
+import           Data.Storable.Endian
 import           Data.Word
 import           Foreign.ForeignPtr
 import           Foreign.Marshal.Array
 import           Foreign.Ptr
 import           Foreign.Storable
 import           GHC.Generics
-import           Data.Storable.Endian
 
 --------------------------------------------------------------------------------
 
