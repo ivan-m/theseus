@@ -144,6 +144,10 @@ instance Theseus Bool where
 
 instance (Theseus a, Theseus b) => Theseus (Either a b)
 
+instance (Theseus a) => Theseus (Maybe a)
+
+instance (Theseus a) => Theseus [a]
+
 --------------------------------------------------------------------------------
 
 -- | These take an extra parameter when encoding\/decoding sum types
@@ -235,6 +239,17 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
   {-# INLINE gDecodeValue' #-}
 
   gEncodeValue' _ p o = gEncodeValue p o . unM1
+  {-# INLINE gEncodeValue' #-}
+
+-- Constructors without arguments
+instance GTheseus U1 where
+  gSizeOfValue = const 0
+  {-# INLINE gSizeOfValue #-}
+
+  gDecodeValue' _ _ _ _ o = return (U1, o)
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' _ _ _ _ = return ()
   {-# INLINE gEncodeValue' #-}
 
 --------------------------------------------------------------------------------
