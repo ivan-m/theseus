@@ -181,6 +181,27 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
 
 -- Nested sum type
 instance (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: (g :+: h)) where
+  gSizeOfValue = go
+    where
+      go (L1 a) = gSizeOfValue a + sizeWord8
+      go (R1 b) = gSizeOfValue b -- Will have the size of the tag in here
+  {-# INLINE gSizeOfValue #-}
+
+  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
+                                if (c == c')
+                                   then -- This is the correct constructor
+                                        first L1 <$> gDecodeValue lc b p o'
+                                   else first R1 <$> gDecodeValue' (c+1) lc b p o
+                                        -- Using original offset!
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' c p o (L1 a) = encodeValue p o c *> gEncodeValue p (o + sizeWord8) a
+  gEncodeValue' c p o (R1 b) = let c1 = c + 1
+                               in c1 `seq` gEncodeValue' c1 p o b
+  {-# INLINE gEncodeValue' #-}
+
+-- Nested sum type with metadata
+instance (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: M1 i t (g :+: h)) where
   gSizeOfValue = (sizeWord8 +) . go
     where
       go (L1 a) = gSizeOfValue a
@@ -235,10 +256,12 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
   gSizeOfValue = gSizeOfValue . unM1
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' _ lc b p o = first M1 <$> gDecodeValue lc b p o
+  -- Need to pass through constructor depth for sum-types
+
+  gDecodeValue' c lc b p o = first M1 <$> gDecodeValue' c lc b p o
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' _ p o = gEncodeValue p o . unM1
+  gEncodeValue' c p o = gEncodeValue' c p o . unM1
   {-# INLINE gEncodeValue' #-}
 
 -- Constructors without arguments
