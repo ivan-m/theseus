@@ -15,7 +15,6 @@
 module Data.Theseus.Values where
 
 import           Control.Arrow            (first)
-import           Data.Bool                (bool)
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as B
@@ -126,21 +125,10 @@ instance (Theseus a, Theseus b) => Theseus (a,b)
 instance (Theseus a, Theseus b, Theseus c) => Theseus (a,b,c)
 instance (Theseus a, Theseus b, Theseus c, Theseus d) => Theseus (a,b,c,d)
 
-falseWord8 :: Word8
-falseWord8 = 0
-
 sizeWord8 :: Int
-sizeWord8 = sizeOfValue falseWord8
+sizeWord8 = sizeOfValue (0::Word8)
 
-instance Theseus Bool where
-  sizeOfValue = const sizeWord8
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue lc b p o = first (/= falseWord8) <$> decodeValue lc b p o
-  {-# INLINE decodeValue #-}
-
-  encodeValue p o = encodeValue p o . bool falseWord8 1
-  {-# INLINE encodeValue #-}
+instance Theseus Bool
 
 instance (Theseus a, Theseus b) => Theseus (Either a b)
 
