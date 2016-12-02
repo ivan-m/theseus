@@ -54,19 +54,23 @@ type LenCheck = Int -> IO ()
 --   Note that some types (such as @Int@) do /not/ have instances, as
 --   their serialisation is platform-dependent.
 class Theseus a where
+
+  -- | The encoded size of a value in bytes.  This is needed for
+  --   encoding product types.
   sizeOfValue :: a -> Int
   default sizeOfValue :: (Generic a, GTheseus (Rep a)) => a -> Int
   sizeOfValue = gSizeOfValue . from
   {-# INLINE sizeOfValue #-}
 
-  -- | Int argument is offset; returns length
+  -- | Decode a value starting at the specified offset.  Returns the
+  --   decoded value and the offset for the next value.
   decodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
   default decodeValue :: (Generic a, GTheseus (Rep a))
                          => LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
   decodeValue lc b p o = first to <$> gDecodeValue lc b p o
   {-# INLINE decodeValue #-}
 
-  -- | Takes offset
+  -- | Encode a value, starting at the specified offset.
   encodeValue :: Ptr x -> Int -> a -> IO ()
   default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> Int -> a -> IO ()
   encodeValue p o = gEncodeValue p o . from
