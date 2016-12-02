@@ -140,16 +140,7 @@ instance Theseus ByteString where
   encodeValue = pokeByteStringOff
   {-# INLINE encodeValue #-}
 
-instance Theseus () where
-  sizeOfValue = sizeOf
-  {-# INLINE sizeOfValue #-}
-
-  decodeValue _ _ _ o = return ((),o)
-  {-# INLINE decodeValue #-}
-
-  encodeValue _ _ _ = return ()
-  {-# INLINE encodeValue #-}
-
+instance Theseus ()
 instance (Theseus a, Theseus b) => Theseus (a,b)
 instance (Theseus a, Theseus b, Theseus c) => Theseus (a,b,c)
 instance (Theseus a, Theseus b, Theseus c, Theseus d) => Theseus (a,b,c,d)
