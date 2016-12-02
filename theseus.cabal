@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Data.Theseus
                      , Data.Theseus.Values
-  build-depends:       base >=4.8 && <4.10
+  build-depends:       base >=4.9 && <4.10
                      , bytestring
                      , storable-endian
   hs-source-dirs:      src

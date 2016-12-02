@@ -8,7 +8,11 @@
    License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
+   You almost definitely do /not/ want to import this.
 
+   It's only going to really be useful if you need/want to manually
+   construct a 'Theseus' instance (and that only makes sense for
+   base-level types).
 
  -}
 module Data.Theseus.Values where
@@ -17,7 +21,6 @@ import           Control.Arrow            (first)
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as B
-import           Data.Int
 import           Data.Storable.Endian
 import           Data.Word
 import           Foreign.ForeignPtr
@@ -26,11 +29,30 @@ import           Foreign.Ptr
 import           Foreign.Storable
 import           GHC.Generics
 
+-- Just for instances
+import           Control.Applicative   (ZipList)
+import           Data.Complex          (Complex)
+import qualified Data.Functor.Compose  as F
+import qualified Data.Functor.Const    as F
+import qualified Data.Functor.Identity as F
+import qualified Data.Functor.Product  as F
+import qualified Data.Functor.Sum      as F
+import           Data.Int
+import           Data.List.NonEmpty    (NonEmpty)
+import           Data.Monoid           (All, Alt, Any, Dual, First, Last,
+                                        Product, Sum)
+import           Data.Proxy            (Proxy)
+import qualified Data.Semigroup        as S
+
 --------------------------------------------------------------------------------
 
 -- | (offset + required length) (i.e. offset of next argument)
 type LenCheck = Int -> IO ()
 
+-- | How to serialise and deserialise an individual value.
+--
+--   Note that some types (such as @Int@) do /not/ have instances, as
+--   their serialisation is platform-dependent.
 class Theseus a where
   sizeOfValue :: a -> Int
   default sizeOfValue :: (Generic a, GTheseus (Rep a)) => a -> Int
@@ -92,6 +114,14 @@ THESEUS_E(Float)
 
 THESEUS(Char)
 
+THESEUS(Ptr a)
+
+THESEUS(FunPtr a)
+
+THESEUS(WordPtr)
+
+THESEUS(IntPtr)
+
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
@@ -129,11 +159,61 @@ sizeWord8 = sizeOfValue (0::Word8)
 
 instance Theseus Bool
 
+instance Theseus Ordering
+
 instance (Theseus a, Theseus b) => Theseus (Either a b)
 
 instance (Theseus a) => Theseus (Maybe a)
 
 instance (Theseus a) => Theseus [a]
+
+instance (Theseus a) => Theseus (ZipList a)
+
+instance (Theseus a) => Theseus (NonEmpty a)
+
+instance Theseus All
+
+instance (Theseus (f a)) => Theseus (Alt f a)
+
+instance Theseus Any
+
+instance (Theseus a) => Theseus (Dual a)
+
+instance (Theseus a) => Theseus (First a)
+
+instance (Theseus a) => Theseus (Last a)
+
+instance (Theseus a) => Theseus (Product a)
+
+instance (Theseus a) => Theseus (Sum a)
+
+instance (Theseus a) => Theseus (Complex a)
+
+instance (Theseus a) => Theseus (F.Identity a)
+
+instance (Theseus a) => Theseus (F.Const a b)
+
+instance (Theseus (f a), Theseus (g a)) => Theseus (F.Sum f g a)
+
+instance (Theseus (f a), Theseus (g a)) => Theseus (F.Product f g a)
+
+instance (Theseus (f (g a))) => Theseus (F.Compose f g a)
+
+instance (Theseus a) => Theseus (S.Min a)
+
+instance (Theseus a) => Theseus (S.Max a)
+
+instance (Theseus a) => Theseus (S.First a)
+
+instance (Theseus a) => Theseus (S.Last a)
+
+instance (Theseus m) => Theseus (S.WrappedMonoid m)
+
+instance (Theseus a) => Theseus (S.Option a)
+
+instance (Theseus a, Theseus b) => Theseus (S.Arg a b)
+
+instance Theseus (Proxy a)
 
 --------------------------------------------------------------------------------
 
