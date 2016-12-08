@@ -31,6 +31,7 @@ test-suite properties
                      , bytestring
                      , QuickCheck >= 2.5 && < 2.10
                      , hspec >= 2.1 && < 2.4
+                     , storable-endian
   hs-source-dirs:      test
   default-language:    Haskell2010
 
