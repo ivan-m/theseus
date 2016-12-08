@@ -19,8 +19,10 @@ import Data.Theseus
 
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck       (Arbitrary(..))
+import Test.QuickCheck           (Arbitrary(..))
+import Test.QuickCheck.Instances ()
 
+import Data.ByteString      (ByteString)
 import Data.Int
 import Data.Proxy
 import Data.Storable.Endian (BigEndian(..), LittleEndian(..))
@@ -42,6 +44,7 @@ main = hspec $
       prop "Word32"             (encodeDecode (Proxy @Word32))
       prop "Double"             (encodeDecode (Proxy @Double))
       prop "Char"               (encodeDecode (Proxy @Char))
+      prop "ByteString"         (encodeDecode (Proxy @ByteString))
     describe "Endian wrappers" $ do
       prop "BE Word16"          (encodeDecode (Proxy @(BigEndian Word16)))
       prop "LE Word16"          (encodeDecode (Proxy @(LittleEndian Word16)))
