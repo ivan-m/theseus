@@ -1,6 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving, TypeApplications
              #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 {- |
    Module      : Main
    Description : Property-based tests
