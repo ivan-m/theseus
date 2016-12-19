@@ -19,7 +19,8 @@ import Data.Theseus
 
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck           (Arbitrary(..), genericShrink, oneof)
+import Test.QuickCheck           (Arbitrary(..), arbitraryBoundedEnum,
+                                  genericShrink, oneof)
 import Test.QuickCheck.Instances ()
 
 import Data.ByteString      (ByteString)
@@ -56,6 +57,7 @@ main = hspec $
       prop "Bool"               (encodeDecode (Proxy @Bool))
       -- Making sure third constructor works
       prop "Ordering"           (encodeDecode (Proxy @Ordering))
+      prop "10 constructors"    (encodeDecode (Proxy @LotsOfConstructors))
       prop "Maybe Word8"        (encodeDecode (Proxy @(Maybe Word8)))
       prop "Either Char Bool"   (encodeDecode (Proxy @(Either Char Bool)))
       prop "[Char]"             (encodeDecode (Proxy @[Char]))
@@ -72,6 +74,12 @@ encodeDecode :: (Eq a, Theseus a) => Proxy a -> a -> Bool
 encodeDecode _ a = either (const False) (a==) (unravel (ravel a))
 
 --------------------------------------------------------------------------------
+
+data LotsOfConstructors = C0 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9
+  deriving (Eq, Show, Bounded, Enum, Generic,Theseus)
+
+instance Arbitrary LotsOfConstructors where
+  arbitrary = arbitraryBoundedEnum
 
 data InnerStructure a = ISOne a ((), Ordering, Double)
                       | ISTwo

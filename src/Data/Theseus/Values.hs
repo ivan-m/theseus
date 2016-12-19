@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, DefaultSignatures, FlexibleContexts, FlexibleInstances,
-             TupleSections, TypeOperators #-}
+             ScopedTypeVariables, TupleSections, TypeOperators #-}
 
 {- |
    Module      : Data.Theseus.Values
@@ -41,7 +41,7 @@ import           Data.Int
 import           Data.List.NonEmpty    (NonEmpty)
 import           Data.Monoid           (All, Alt, Any, Dual, First, Last,
                                         Product, Sum)
-import           Data.Proxy            (Proxy)
+import           Data.Proxy            (Proxy(..))
 import qualified Data.Semigroup        as S
 
 --------------------------------------------------------------------------------
@@ -62,6 +62,12 @@ class Theseus a where
   sizeOfValue = gSizeOfValue . from
   {-# INLINE sizeOfValue #-}
 
+  -- | Number of constructors available for this type.  This will
+  --   usually be @1@.
+  numConstructors :: Proxy a -> Word8
+  default numConstructors :: (Generic a, GTheseus (Rep a)) => Proxy a -> Word8
+  numConstructors = gNumConstructors . fmap from
+
   -- | Decode a value starting at the specified offset.  Returns the
   --   decoded value and the offset for the next value.
   decodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
@@ -80,6 +86,9 @@ class Theseus a where
 instance Theseus (T) where {                                \
   sizeOfValue = sizeOf;                                     \
   {-# INLINE sizeOfValue #-};                               \
+                                                            \
+  numConstructors = const 1;                                \
+  {-# INLINE numConstructors #-};                           \
                                                             \
   decodeValue lc _ p o = do { lc olen ;                     \
                               (,olen) <$> peekByteOff p o } \
@@ -129,6 +138,9 @@ THESEUS(IntPtr)
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
+
+  numConstructors = const 1
+  {-# INLINE numConstructors #-}
 
   decodeValue lc b p o = do let odata = o + sizeOfLength
                             lc odata
@@ -212,20 +224,27 @@ instance Theseus (Proxy a)
 
 --------------------------------------------------------------------------------
 
--- | These take an extra parameter when encoding\/decoding sum types
---   (i.e. more than one possible constructor).  It is assumed that no
---   type will have more than @256@ constructors.
+-- | These take an extra two parameters when encoding\/decoding to be
+--   able to handle sum types (i.e. more than one possible
+--   constructor).  It is assumed that no type will have more than
+--   @256@ constructors.
 class GTheseus f where
   gSizeOfValue :: f a -> Int
-  gDecodeValue' :: Word8 -> LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
-  gEncodeValue' :: Word8 -> Ptr x -> Int -> f a -> IO ()
 
-gDecodeValue :: (GTheseus f) => LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
-gDecodeValue = gDecodeValue' 0
+  gNumConstructors :: Proxy (f a) -> Word8
+  gNumConstructors = const 1
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' :: Proxy (f a) -> Word8 -> LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+
+  gEncodeValue' :: Proxy (f a) -> Word8 -> Ptr x -> Int -> f a -> IO ()
+
+gDecodeValue :: forall f a x. (GTheseus f) => LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+gDecodeValue = gDecodeValue' (Proxy :: Proxy (f a)) 0
 {-# INLINE gDecodeValue #-}
 
-gEncodeValue :: (GTheseus f) => Ptr x -> Int -> f a -> IO ()
-gEncodeValue = gEncodeValue' 0
+gEncodeValue :: forall f a x. (GTheseus f) => Ptr x -> Int -> f a -> IO ()
+gEncodeValue = gEncodeValue' (Proxy :: Proxy (f a)) 0
 {-# INLINE gEncodeValue #-}
 
 -- Product type
@@ -233,54 +252,107 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
   gSizeOfValue (a :*: b) = gSizeOfValue a + gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' _ lc b p o = do (a,o') <- gDecodeValue lc b p o
-                                first (a :*:) <$> gDecodeValue lc b p o'
+  gDecodeValue' _ _ lc b ptr o = do (a,o') <- gDecodeValue lc b ptr o
+                                    first (a :*:) <$> gDecodeValue lc b ptr o'
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' _ p o (a :*: b) = gEncodeValue p o a
-                                  *> gEncodeValue p (o + gSizeOfValue a) b
+  gEncodeValue' _ _ ptr o (a :*: b) = gEncodeValue ptr o a
+                                      *> gEncodeValue ptr (o + gSizeOfValue a) b
   {-# INLINE gEncodeValue' #-}
 
--- Nested sum type
-instance (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: (g :+: h)) where
+leftSum :: Proxy ((f :+: g) a) -> Proxy (f a)
+leftSum _ = Proxy
+{-# INLINE leftSum #-}
+
+rightSum :: Proxy ((f :+: g) a) -> Proxy (g a)
+rightSum _ = Proxy
+{-# INLINE rightSum #-}
+
+-- | Bi-Nested sum type
+instance {-# Overlapping #-} (GTheseus f, GTheseus g, GTheseus h, GTheseus i) => GTheseus ((f :+: g) :+: (h :+: i)) where
+  gSizeOfValue = go
+    where
+      -- Will have the size of the tag in both sides already
+      go (L1 a) = gSizeOfValue a
+      go (R1 b) = gSizeOfValue b
+  {-# INLINE gSizeOfValue #-}
+
+  -- We do /not/ want to just add constructors for f, g, h and i
+  -- individuall, in case we have a sum type containing a sum type as
+  -- a parameter.
+  --
+  -- There's probably a better way of expressing this actual constraint.
+  gNumConstructors p =   gNumConstructors (leftSum p)
+                       + gNumConstructors (rightSum p)
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' pr c lc b ptr o = do (c',_) <- decodeValue lc b ptr o
+                                     -- We will have to read this again, so don't use the offset
+                                     if (c' < c + cLeft) -- 0-indexed, so don't use <=
+                                        then -- Left branch
+                                             first L1 <$> gDecodeValue' prLeft c lc b ptr o
+                                        else let cr = c + cLeft
+                                             in cr `seq` first R1 <$> gDecodeValue' (rightSum pr) cr lc b ptr o
+    where
+      prLeft = leftSum pr
+      cLeft = gNumConstructors prLeft
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' pr c ptr o (L1 a) = gEncodeValue' (leftSum pr) c ptr o a
+  gEncodeValue' pr c ptr o (R1 b) = let cr = c + gNumConstructors (leftSum pr)
+                                    in cr `seq` gEncodeValue' (rightSum pr) cr ptr o b
+  {-# INLINE gEncodeValue' #-}
+
+-- | Left-Nested sum type
+instance {-# Overlappable #-} (GTheseus f, GTheseus g, GTheseus h) => GTheseus ((f :+: g) :+: h) where
+  gSizeOfValue = go
+    where
+      go (L1 a) = gSizeOfValue a -- Will have the size of the tag in here
+      go (R1 b) = gSizeOfValue b + sizeWord8
+  {-# INLINE gSizeOfValue #-}
+
+  gNumConstructors p = gNumConstructors (leftSum p) + 1
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' pr c lc b ptr o = do (c',o') <- decodeValue lc b ptr o
+                                     if (c' < c + gNumConstructors prLeft)
+                                        then -- This is the correct constructor
+                                             first L1 <$> gDecodeValue' prLeft c lc b ptr o
+                                        else first R1 <$> gDecodeValue lc b ptr o'
+                                             -- This must be it.
+    where
+      prLeft = leftSum pr
+  {-# INLINE gDecodeValue' #-}
+
+  gEncodeValue' pr c ptr o (L1 a) = gEncodeValue' (leftSum pr) c ptr o a
+  gEncodeValue' pr c ptr o (R1 b) = let cr = c + gNumConstructors (leftSum pr)
+                                    in encodeValue ptr o cr *> gEncodeValue ptr (o + sizeWord8) b
+  {-# INLINE gEncodeValue' #-}
+
+-- | Right-Nested sum type
+instance {-# Overlappable #-} (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: (g :+: h)) where
   gSizeOfValue = go
     where
       go (L1 a) = gSizeOfValue a + sizeWord8
       go (R1 b) = gSizeOfValue b -- Will have the size of the tag in here
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
-                                if (c == c')
-                                   then -- This is the correct constructor
-                                        first L1 <$> gDecodeValue lc b p o'
-                                   else first R1 <$> gDecodeValue' (c+1) lc b p o
-                                        -- Using original offset!
+  gNumConstructors p = 1 + gNumConstructors (rightSum p)
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' pr c lc b ptr o = do (c',o') <- decodeValue lc b ptr o
+                                     if (c == c')
+                                        then -- This is the correct constructor
+                                             first L1 <$> gDecodeValue lc b ptr o'
+                                             -- left has 1 constructor
+                                        else let cr = c + 1
+                                              in cr `seq` first R1 <$> gDecodeValue' (rightSum pr) cr lc b ptr o
+                                             -- Using original offset!
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' c p o (L1 a) = encodeValue p o c *> gEncodeValue p (o + sizeWord8) a
-  gEncodeValue' c p o (R1 b) = let c1 = c + 1
-                               in c1 `seq` gEncodeValue' c1 p o b
-  {-# INLINE gEncodeValue' #-}
-
--- Nested sum type with metadata
-instance (GTheseus f, GTheseus g, GTheseus h) => GTheseus (f :+: M1 i t (g :+: h)) where
-  gSizeOfValue = (sizeWord8 +) . go
-    where
-      go (L1 a) = gSizeOfValue a
-      go (R1 b) = gSizeOfValue b
-  {-# INLINE gSizeOfValue #-}
-
-  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
-                                if (c == c')
-                                   then -- This is the correct constructor
-                                        first L1 <$> gDecodeValue lc b p o'
-                                   else first R1 <$> gDecodeValue' (c+1) lc b p o
-                                        -- Using original offset!
-  {-# INLINE gDecodeValue' #-}
-
-  gEncodeValue' c p o (L1 a) = encodeValue p o c *> gEncodeValue p (o + sizeWord8) a
-  gEncodeValue' c p o (R1 b) = let c1 = c + 1
-                               in c1 `seq` gEncodeValue' c1 p o b
+  gEncodeValue' _  c ptr o (L1 a) = encodeValue ptr o c *> gEncodeValue ptr (o + sizeWord8) a
+  gEncodeValue' pr c ptr o (R1 b) = let cr = c + 1 -- Left has 1 constructor
+                                    in cr `seq` gEncodeValue' (rightSum pr) cr ptr o b
   {-# INLINE gEncodeValue' #-}
 
 instance {-# OVERLAPPABLE #-} (GTheseus f, GTheseus g) => GTheseus (f :+: g) where
@@ -290,16 +362,19 @@ instance {-# OVERLAPPABLE #-} (GTheseus f, GTheseus g) => GTheseus (f :+: g) whe
       go (R1 b) = gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' c lc b p o = do (c',o') <- decodeValue lc b p o
-                                if (c == c')
-                                   then -- This is the correct constructor
-                                        first L1 <$> gDecodeValue lc b p o'
-                                   else first R1 <$> gDecodeValue lc b p o'
-                                        -- Last constructor, who cares what the code is
+  gNumConstructors _ = 2
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' _ c lc b ptr o = do (c',o') <- decodeValue lc b ptr o
+                                    if (c == c')
+                                       then -- This is the correct constructor
+                                            first L1 <$> gDecodeValue lc b ptr o'
+                                       else first R1 <$> gDecodeValue lc b ptr o'
+                                            -- Last constructor, who cares what the code is
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' c p o (L1 a) = encodeValue p o c     *> gEncodeValue p (o + sizeWord8) a
-  gEncodeValue' c p o (R1 b) = encodeValue p o (c+1) *> gEncodeValue p (o + sizeWord8) b
+  gEncodeValue' _ c p o (L1 a) = encodeValue p o c     *> gEncodeValue p (o + sizeWord8) a
+  gEncodeValue' _ c p o (R1 b) = encodeValue p o (c+1) *> gEncodeValue p (o + sizeWord8) b
   {-# INLINE gEncodeValue' #-}
 
 -- Equivalent to a single value.
@@ -307,10 +382,10 @@ instance (Theseus c) => GTheseus (K1 i c) where
   gSizeOfValue = sizeOfValue . unK1
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' _ lc b p o = first K1 <$> decodeValue lc b p o
+  gDecodeValue' _ _ lc b ptr o = first K1 <$> decodeValue lc b ptr o
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' _ p o = encodeValue p o . unK1
+  gEncodeValue' _ _ ptr o = encodeValue ptr o . unK1
   {-# INLINE gEncodeValue' #-}
 
 -- Meta-information
@@ -320,21 +395,27 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
 
   -- Need to pass through constructor depth for sum-types
 
-  gDecodeValue' c lc b p o = first M1 <$> gDecodeValue' c lc b p o
+  gNumConstructors = gNumConstructors . unMeta
+  {-# INLINE gNumConstructors #-}
+
+  gDecodeValue' pr c lc b ptr o = first M1 <$> gDecodeValue' (unMeta pr) c lc b ptr o
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' c p o = gEncodeValue' c p o . unM1
+  gEncodeValue' pr c ptr o = gEncodeValue' (unMeta pr) c ptr o . unM1
   {-# INLINE gEncodeValue' #-}
+
+unMeta :: Proxy ((M1 i t f) a) -> Proxy (f a)
+unMeta _ = Proxy
 
 -- Constructors without arguments
 instance GTheseus U1 where
   gSizeOfValue = const 0
   {-# INLINE gSizeOfValue #-}
 
-  gDecodeValue' _ _ _ _ o = return (U1, o)
+  gDecodeValue' _ _ _ _ _ o = return (U1, o)
   {-# INLINE gDecodeValue' #-}
 
-  gEncodeValue' _ _ _ _ = return ()
+  gEncodeValue' _ _ _ _ _ = return ()
   {-# INLINE gEncodeValue' #-}
 
 --------------------------------------------------------------------------------
