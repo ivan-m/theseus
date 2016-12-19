@@ -71,14 +71,15 @@ encodeDecode _ a = either (const False) (a==) (unravel (ravel a))
 
 -- Since storable-endian doesn't define these...
 
-deriving instance (Eq a) => Eq (BigEndian a)
-deriving instance (Eq a) => Eq (LittleEndian a)
+instance (Arbitrary a) => Arbitrary (BigEndian a) where
+  arbitrary = BE <$> arbitrary
 
-deriving instance (Show a) => Show (BigEndian a)
-deriving instance (Show a) => Show (LittleEndian a)
+  shrink = map BE . shrink . getBigEndian
 
-deriving instance (Arbitrary a) => Arbitrary (BigEndian a)
-deriving instance (Arbitrary a) => Arbitrary (LittleEndian a)
+instance (Arbitrary a) => Arbitrary (LittleEndian a) where
+  arbitrary = LE <$> arbitrary
+
+  shrink = map LE . shrink . getLittleEndian
 
 --------------------------------------------------------------------------------
 
