@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving, TypeApplications
+{-# LANGUAGE DeriveAnyClass, DeriveGeneric, StandaloneDeriving, TypeApplications
              #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -6,7 +6,7 @@
 {- |
    Module      : Main
    Description : Property-based tests
-   Copyright   : Ivan Lazar Miljenovic, Patryk Zadarnowski
+   Copyright   : Ivan Lazar Miljenovic
    License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
@@ -19,7 +19,7 @@ import Data.Theseus
 
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck           (Arbitrary(..))
+import Test.QuickCheck           (Arbitrary(..), genericShrink, oneof)
 import Test.QuickCheck.Instances ()
 
 import Data.ByteString      (ByteString)
@@ -27,6 +27,7 @@ import Data.Int
 import Data.Proxy
 import Data.Storable.Endian (BigEndian(..), LittleEndian(..))
 import Data.Word
+import GHC.Generics
 
 --------------------------------------------------------------------------------
 
@@ -61,11 +62,41 @@ main = hspec $
     describe "Product types" $ do
       prop "(Word32, Ordering)" (encodeDecode (Proxy @(Word32, Ordering)))
       prop "((), Bool, Word8)"  (encodeDecode (Proxy @((), Bool, Word8)))
+    describe "Complex nested structure" $ do
+      prop "Inner component"    (encodeDecode (Proxy @(InnerStructure Word8)))
+      prop "Entire structure"   (encodeDecode (Proxy @OuterStructure))
 
 --------------------------------------------------------------------------------
 
 encodeDecode :: (Eq a, Theseus a) => Proxy a -> a -> Bool
 encodeDecode _ a = either (const False) (a==) (unravel (ravel a))
+
+--------------------------------------------------------------------------------
+
+data InnerStructure a = ISOne a ((), Ordering, Double)
+                      | ISTwo
+                      | ISThree { _three1 :: ByteString
+                                , _three2 :: (Word8, BigEndian Word16, LittleEndian Word32, Word64)
+                                , _three3 :: String
+                                }
+  deriving (Eq, Show, Read, Generic, Theseus)
+
+instance (Arbitrary a) => Arbitrary (InnerStructure a) where
+  arbitrary = oneof [ ISOne <$> arbitrary <*> arbitrary
+                    , pure ISTwo
+                    , ISThree <$> arbitrary <*> arbitrary <*> arbitrary
+                    ]
+
+  shrink = genericShrink
+
+data OuterStructure = OS Bool
+                         (Either Char ())
+                         (InnerStructure Word8)
+                         (Maybe ByteString)
+  deriving (Eq, Show, Read, Generic, Theseus)
+
+instance Arbitrary OuterStructure where
+  arbitrary = OS <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 --------------------------------------------------------------------------------
 
