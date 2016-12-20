@@ -31,6 +31,7 @@ import           GHC.Generics
 
 -- Just for instances
 import           Control.Applicative   (ZipList)
+import qualified Data.ByteString.Lazy  as LB
 import           Data.Complex          (Complex)
 import qualified Data.Functor.Compose  as F
 import qualified Data.Functor.Const    as F
@@ -142,6 +143,16 @@ instance Theseus ByteString where
   {-# INLINE decodeValue #-}
 
   encodeValue = pokeByteStringOff
+  {-# INLINE encodeValue #-}
+
+instance Theseus LB.ByteString where
+  sizeOfValue = sizeOfValue . LB.toChunks
+  {-# INLINE sizeOfValue #-}
+
+  decodeValue lc b p o = first LB.fromChunks <$> decodeValue lc b p o
+  {-# INLINE decodeValue #-}
+
+  encodeValue ptr o = encodeValue ptr o . LB.toChunks
   {-# INLINE encodeValue #-}
 
 instance Theseus ()
