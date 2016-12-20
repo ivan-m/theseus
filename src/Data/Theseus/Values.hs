@@ -17,7 +17,7 @@
  -}
 module Data.Theseus.Values where
 
-import           Control.Arrow            (first, second)
+import           Control.Arrow            (first)
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Internal as B
