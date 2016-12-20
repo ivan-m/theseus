@@ -68,9 +68,11 @@ main = hspec $ do
     describe "Complex nested structure" $ do
       prop "Inner component"    (encodeDecode (Proxy @(InnerStructure Word8)))
       prop "Entire structure"   (encodeDecode (Proxy @OuterStructure))
-  describe "Minimality" $
+  describe "Minimality" $ do
     it "Has minimal representation for sum-types" $
        all ((1==) . B.length . ravel) [minBound .. maxBound :: LotsOfConstructors]
+    it "Empty constructors take no space" $
+       B.null (ravel ())
 
 --------------------------------------------------------------------------------
 
