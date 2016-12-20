@@ -32,6 +32,7 @@ library
 test-suite properties
   type:                exitcode-stdio-1.0
   main-is:             propTests.hs
+  other-modules:       Data.Theseus.SampleTypes
   build-depends:       theseus
                      , base
                      , bytestring

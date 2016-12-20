@@ -16,6 +16,7 @@
 module Main (main) where
 
 import Data.Theseus
+import Data.Theseus.SampleTypes
 
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -89,14 +90,6 @@ data LotsOfConstructors = C0 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9
 instance Arbitrary LotsOfConstructors where
   arbitrary = arbitraryBoundedEnum
 
-data InnerStructure a = ISOne a ((), Ordering, Double)
-                      | ISTwo
-                      | ISThree { _three1 :: ByteString
-                                , _three2 :: (Word8, BigEndian Word16, LittleEndian Word32, Word64)
-                                , _three3 :: String
-                                }
-  deriving (Eq, Show, Read, Generic, Theseus)
-
 instance (Arbitrary a) => Arbitrary (InnerStructure a) where
   arbitrary = oneof [ ISOne <$> arbitrary <*> arbitrary
                     , pure ISTwo
@@ -104,12 +97,6 @@ instance (Arbitrary a) => Arbitrary (InnerStructure a) where
                     ]
 
   shrink = genericShrink
-
-data OuterStructure = OS Bool
-                         (Either Char ())
-                         (InnerStructure Word8)
-                         (Maybe ByteString)
-  deriving (Eq, Show, Read, Generic, Theseus)
 
 instance Arbitrary OuterStructure where
   arbitrary = OS <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
