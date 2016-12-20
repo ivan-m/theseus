@@ -17,7 +17,7 @@ tested-with:         GHC == 7.10.2, GHC == 8.0.1, GHC == 8.1.*
 library
   exposed-modules:     Data.Theseus
                      , Data.Theseus.Values
-  build-depends:       base >=4.9 && <4.10
+  build-depends:       base >=4.8 && <4.10
                      , bytestring
                      , storable-endian >= 0.2.6 && < 0.3
   hs-source-dirs:      src

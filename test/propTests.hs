@@ -1,5 +1,4 @@
-{-# LANGUAGE DeriveAnyClass, DeriveGeneric, StandaloneDeriving, TypeApplications
-             #-}
+{-# LANGUAGE DeriveAnyClass, DeriveGeneric #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -41,33 +40,33 @@ main :: IO ()
 main = hspec $ do
   describe "decode . encode = id" $ do
     describe "Explicit instances" $ do
-      prop "Int8"               (encodeDecode (Proxy @Int8))
-      prop "Word8"              (encodeDecode (Proxy @Word8))
-      prop "Int16"              (encodeDecode (Proxy @Int16))
-      prop "Word32"             (encodeDecode (Proxy @Word32))
-      prop "Double"             (encodeDecode (Proxy @Double))
-      prop "Char"               (encodeDecode (Proxy @Char))
-      prop "ByteString"         (encodeDecode (Proxy @ByteString))
+      prop "Int8"               (encodeDecode (Proxy :: Proxy Int8))
+      prop "Word8"              (encodeDecode (Proxy :: Proxy Word8))
+      prop "Int16"              (encodeDecode (Proxy :: Proxy Int16))
+      prop "Word32"             (encodeDecode (Proxy :: Proxy Word32))
+      prop "Double"             (encodeDecode (Proxy :: Proxy Double))
+      prop "Char"               (encodeDecode (Proxy :: Proxy Char))
+      prop "ByteString"         (encodeDecode (Proxy :: Proxy ByteString))
     describe "Endian wrappers" $ do
-      prop "BE Word16"          (encodeDecode (Proxy @(BigEndian Word16)))
-      prop "LE Word16"          (encodeDecode (Proxy @(LittleEndian Word16)))
+      prop "BE Word16"          (encodeDecode (Proxy :: Proxy (BigEndian Word16)))
+      prop "LE Word16"          (encodeDecode (Proxy :: Proxy (LittleEndian Word16)))
     describe "Constructors without arguments" $ do
-      prop "()"                 (encodeDecode (Proxy @()))
-      prop "Proxy Int"          (encodeDecode (Proxy @(Proxy Int)))
+      prop "()"                 (encodeDecode (Proxy :: Proxy ()))
+      prop "Proxy Int"          (encodeDecode (Proxy :: Proxy (Proxy Int)))
     describe "Sum types" $ do
-      prop "Bool"               (encodeDecode (Proxy @Bool))
+      prop "Bool"               (encodeDecode (Proxy :: Proxy Bool))
       -- Making sure third constructor works
-      prop "Ordering"           (encodeDecode (Proxy @Ordering))
-      prop "10 constructors"    (encodeDecode (Proxy @LotsOfConstructors))
-      prop "Maybe Word8"        (encodeDecode (Proxy @(Maybe Word8)))
-      prop "Either Char Bool"   (encodeDecode (Proxy @(Either Char Bool)))
-      prop "[Char]"             (encodeDecode (Proxy @[Char]))
+      prop "Ordering"           (encodeDecode (Proxy :: Proxy Ordering))
+      prop "10 constructors"    (encodeDecode (Proxy :: Proxy LotsOfConstructors))
+      prop "Maybe Word8"        (encodeDecode (Proxy :: Proxy (Maybe Word8)))
+      prop "Either Char Bool"   (encodeDecode (Proxy :: Proxy (Either Char Bool)))
+      prop "[Char]"             (encodeDecode (Proxy :: Proxy [Char]))
     describe "Product types" $ do
-      prop "(Word32, Ordering)" (encodeDecode (Proxy @(Word32, Ordering)))
-      prop "((), Bool, Word8)"  (encodeDecode (Proxy @((), Bool, Word8)))
+      prop "(Word32, Ordering)" (encodeDecode (Proxy :: Proxy (Word32, Ordering)))
+      prop "((), Bool, Word8)"  (encodeDecode (Proxy :: Proxy ((), Bool, Word8)))
     describe "Complex nested structure" $ do
-      prop "Inner component"    (encodeDecode (Proxy @(InnerStructure Word8)))
-      prop "Entire structure"   (encodeDecode (Proxy @OuterStructure))
+      prop "Inner component"    (encodeDecode (Proxy :: Proxy (InnerStructure Word8)))
+      prop "Entire structure"   (encodeDecode (Proxy :: Proxy OuterStructure))
   describe "Minimality" $ do
     it "Has minimal representation for sum-types" $
        all ((1==) . B.length . ravel) [minBound .. maxBound :: LotsOfConstructors]
