@@ -23,12 +23,13 @@ import Test.QuickCheck           (Arbitrary(..), arbitraryBoundedEnum,
                                   genericShrink, oneof)
 import Test.QuickCheck.Instances ()
 
-import Data.ByteString      (ByteString)
-import Data.Int
-import Data.Proxy
-import Data.Storable.Endian (BigEndian(..), LittleEndian(..))
-import Data.Word
-import GHC.Generics
+import           Data.ByteString      (ByteString)
+import qualified Data.ByteString      as B
+import           Data.Int
+import           Data.Proxy
+import           Data.Storable.Endian (BigEndian(..), LittleEndian(..))
+import           Data.Word
+import           GHC.Generics
 
 --------------------------------------------------------------------------------
 
@@ -37,7 +38,7 @@ import GHC.Generics
 -- possibilities are included.
 
 main :: IO ()
-main = hspec $
+main = hspec $ do
   describe "decode . encode = id" $ do
     describe "Explicit instances" $ do
       prop "Int8"               (encodeDecode (Proxy @Int8))
@@ -67,6 +68,9 @@ main = hspec $
     describe "Complex nested structure" $ do
       prop "Inner component"    (encodeDecode (Proxy @(InnerStructure Word8)))
       prop "Entire structure"   (encodeDecode (Proxy @OuterStructure))
+  describe "Minimality" $
+    it "Has minimal representation for sum-types" $
+       all ((1==) . B.length . ravel) [minBound .. maxBound :: LotsOfConstructors]
 
 --------------------------------------------------------------------------------
 
