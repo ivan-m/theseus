@@ -12,7 +12,7 @@ build-type:          Simple
 extra-source-files:  ChangeLog.md, README.md
 cabal-version:       >=1.10
 
-tested-with:         GHC == 7.10.2, GHC == 8.0.1, GHC == 8.1.*
+tested-with:         GHC == 8.0.1, GHC == 8.1.*
 
 source-repository head
     type:         git
@@ -21,7 +21,7 @@ source-repository head
 library
   exposed-modules:     Data.Theseus
                      , Data.Theseus.Values
-  build-depends:       base >=4.8 && <4.11
+  build-depends:       base >=4.9 && <4.11
                      , bytestring
                      , storable-endian >= 0.2.6 && < 0.3
   hs-source-dirs:      src
