@@ -73,6 +73,8 @@ main = hspec $ do
        all ((1==) . B.length . ravel) [minBound .. maxBound :: LotsOfConstructors]
     it "Empty constructors take no space" $
        B.null (ravel ())
+    it "No overhead for product types" $
+       ravel ('a', True, 127 :: Word16) == mconcat [ravel 'a', ravel True, ravel (127 :: Word16)]
 
 --------------------------------------------------------------------------------
 
