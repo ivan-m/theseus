@@ -35,19 +35,15 @@ import           GHC.Exts             (Constraint)
 --------------------------------------------------------------------------------
 
 main :: IO ()
-main = testBench $ do
-  compareWithValue "small"  smallOuter
-  compareWithValue "medium" mediumOuter
-  compareWithValue "large"  largeOuter
+main =
+  testBench (mapM_ (uncurry compareWithValue) samples)
 
 compareWithValue :: String -> OuterStructure -> TestBench
 compareWithValue lbl a = compareFunc ("Comparing " ++ lbl ++ " values")
                                      (`withLibrary` (encodeDecode a))
                                      (testWith (assertEqual "Should decode original value" (Just a))
                                       `mappend` benchNormalForm)
-                                     $ do comp "Theseus" Theseus
-                                          comp "Binary"  Binary
-                                          comp "Cereal"  Cereal
+                                     (mapM_ (comp =<< show) [minBound .. maxBound])
 
 --------------------------------------------------------------------------------
 
@@ -111,6 +107,12 @@ instance (NFData a) => NFData (BigEndian a)
 instance (NFData a) => NFData (LittleEndian a)
 instance (NFData a) => NFData (InnerStructure a)
 instance               NFData OuterStructure
+
+samples :: [(String, OuterStructure)]
+samples = [ ("small",  smallOuter)
+          , ("medium", mediumOuter)
+          , ("large",  largeOuter)
+          ]
 
 smallInner :: InnerStructure Word8
 smallInner = ISTwo
