@@ -26,17 +26,25 @@ import TestBench
 
 import           Control.DeepSeq      (NFData(..))
 import           Data.ByteString      (ByteString)
+import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Proxy           (Proxy(..))
 import           Data.Storable.Endian (BigEndian(..), LittleEndian(..))
 import           Data.Word            (Word8)
 import           GHC.Exts             (Constraint)
+import           Text.Printf
 
 --------------------------------------------------------------------------------
 
 main :: IO ()
-main =
-  testBench (mapM_ (uncurry compareWithValue) samples)
+main = do
+  testBench $
+    collection "Comparing encoding/decoding speed"
+               (mapM_ (uncurry compareWithValue) samples)
+
+  putStrLn "" -- blank line
+  putStrLn "Comparing encoding size"
+  mapM_ (uncurry compareSizes) samples
 
 compareWithValue :: String -> OuterStructure -> TestBench
 compareWithValue lbl a = compareFunc ("Comparing " ++ lbl ++ " values")
@@ -44,6 +52,12 @@ compareWithValue lbl a = compareFunc ("Comparing " ++ lbl ++ " values")
                                      (testWith (assertEqual "Should decode original value" (Just a))
                                       `mappend` benchNormalForm)
                                      (mapM_ (comp =<< show) [minBound .. maxBound])
+
+compareSizes :: String -> OuterStructure -> IO ()
+compareSizes lbl a = do printf "  Comparing %s values\n" lbl
+                        mapM_ sizeOf [minBound .. maxBound]
+  where
+    sizeOf l = printf "    %-15s %3d bytes\n" (show l) (BS.length (withLibrary l (`encode`a)))
 
 --------------------------------------------------------------------------------
 
