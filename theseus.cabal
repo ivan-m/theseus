@@ -44,3 +44,22 @@ test-suite properties
   default-language:    Haskell2010
 
   ghc-options:         -Wall
+
+benchmark comparison
+  type:                exitcode-stdio-1.0
+  main-is:             comparison.hs
+  other-modules:       Data.Theseus.SampleTypes
+  build-depends:       theseus
+                     , base
+                     , bytestring
+                     , deepseq
+                     , HUnit
+                     , storable-endian
+                     , testbench == 0.1.*
+
+                     , binary == 0.8.*
+                     , cereal == 0.5.*
+  hs-source-dirs:      utils
+  default-language:    Haskell2010
+
+  ghc-options:         -Wall
