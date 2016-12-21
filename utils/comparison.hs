@@ -123,9 +123,10 @@ instance (NFData a) => NFData (InnerStructure a)
 instance               NFData OuterStructure
 
 samples :: [(String, OuterStructure)]
-samples = [ ("small",  smallOuter)
-          , ("medium", mediumOuter)
-          , ("large",  largeOuter)
+samples = [ ("small",             smallOuter)
+          , ("medium",            mediumOuter)
+          , ("large",             largeOuter)
+          , ("large (no String)", largeOuterNoString)
           ]
 
 smallInner :: InnerStructure Word8
@@ -158,3 +159,16 @@ largeOuter = OS False
                 largeInner
                 (Just "Scaramouche! Scaramouche! Will you do the Fandango?!?\n\
                       \Thunderbolt and lightning, very very frightening me!")
+
+largeInnerNoString :: InnerStructure Word8
+largeInnerNoString = ISThree { _three1 = "Is this the real life?"
+                             , _three2 = (253, BE 6243, LE 9834234, 23409834)
+                             , _three3 = ""
+                             }
+
+largeOuterNoString :: OuterStructure
+largeOuterNoString = OS False
+                        (Left maxBound)
+                        largeInnerNoString
+                        (Just "Scaramouche! Scaramouche! Will you do the Fandango?!?\n\
+                              \Thunderbolt and lightning, very very frightening me!")
