@@ -1,5 +1,5 @@
-{-# LANGUAGE ConstraintKinds, KindSignatures, OverloadedStrings, RankNTypes,
-             TypeApplications #-}
+{-# LANGUAGE ConstraintKinds, FlexibleInstances, KindSignatures,
+             OverloadedStrings, RankNTypes, TypeApplications #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -18,8 +18,10 @@ module Main (main) where
 import Data.Theseus
 import Data.Theseus.SampleTypes
 
-import qualified Data.Binary    as B
-import qualified Data.Serialize as C
+import qualified Data.Binary     as B
+import qualified Data.Binary.Get as B
+import qualified Data.Binary.Put as B
+import qualified Data.Serialize  as C
 
 import Test.HUnit (assertEqual)
 import TestBench
@@ -30,7 +32,7 @@ import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Proxy           (Proxy(..))
 import           Data.Storable.Endian (BigEndian(..), LittleEndian(..))
-import           Data.Word            (Word8)
+import           Data.Word
 import           GHC.Exts             (Constraint)
 import           Text.Printf
 
@@ -100,8 +102,36 @@ instance Serialisation B.Binary where
                   Right ("", _, a) -> Just a
                   _                -> Nothing
 
-instance (B.Binary a) => B.Binary (BigEndian a)
-instance (B.Binary a) => B.Binary (LittleEndian a)
+instance B.Binary (BigEndian Word16) where
+  put = B.putWord16be . getBigEndian
+
+  get = BE <$> B.getWord16be
+
+instance B.Binary (LittleEndian Word16) where
+  put = B.putWord16le . getLittleEndian
+
+  get = LE <$> B.getWord16le
+
+instance B.Binary (BigEndian Word32) where
+  put = B.putWord32be . getBigEndian
+
+  get = BE <$> B.getWord32be
+
+instance B.Binary (LittleEndian Word32) where
+  put = B.putWord32le . getLittleEndian
+
+  get = LE <$> B.getWord32le
+
+instance B.Binary (BigEndian Word64) where
+  put = B.putWord64be . getBigEndian
+
+  get = BE <$> B.getWord64be
+
+instance B.Binary (LittleEndian Word64) where
+  put = B.putWord64le . getLittleEndian
+
+  get = LE <$> B.getWord64le
+
 instance (B.Binary a) => B.Binary (InnerStructure a)
 instance                 B.Binary OuterStructure
 
@@ -113,8 +143,36 @@ instance Serialisation C.Serialize where
 
   decode _ = either (const Nothing) Just . C.decode
 
-instance (C.Serialize a) => C.Serialize (BigEndian a)
-instance (C.Serialize a) => C.Serialize (LittleEndian a)
+instance C.Serialize (BigEndian Word16) where
+  put = C.putWord16be . getBigEndian
+
+  get = BE <$> C.getWord16be
+
+instance C.Serialize (LittleEndian Word16) where
+  put = C.putWord16le . getLittleEndian
+
+  get = LE <$> C.getWord16le
+
+instance C.Serialize (BigEndian Word32) where
+  put = C.putWord32be . getBigEndian
+
+  get = BE <$> C.getWord32be
+
+instance C.Serialize (LittleEndian Word32) where
+  put = C.putWord32le . getLittleEndian
+
+  get = LE <$> C.getWord32le
+
+instance C.Serialize (BigEndian Word64) where
+  put = C.putWord64be . getBigEndian
+
+  get = BE <$> C.getWord64be
+
+instance C.Serialize (LittleEndian Word64) where
+  put = C.putWord64le . getLittleEndian
+
+  get = LE <$> C.getWord64le
+
 instance (C.Serialize a) => C.Serialize (InnerStructure a)
 instance                    C.Serialize OuterStructure
 
