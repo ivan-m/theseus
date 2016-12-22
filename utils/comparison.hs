@@ -46,14 +46,14 @@ main = do
   putStrLn "Comparing encoding size"
   mapM_ (uncurry compareSizes) samples
 
-compareWithValue :: String -> OuterStructure -> TestBench
+compareWithValue :: (CanTestWith a) => String -> a -> TestBench
 compareWithValue lbl a = compareFunc ("Comparing " ++ lbl ++ " values")
                                      (`withLibrary` (encodeDecode a))
                                      (testWith (assertEqual "Should decode original value" (Just a))
                                       `mappend` benchNormalForm)
                                      (mapM_ (comp =<< show) [minBound .. maxBound])
 
-compareSizes :: String -> OuterStructure -> IO ()
+compareSizes :: (SerialiseAll a) => String -> a -> IO ()
 compareSizes lbl a = do printf "  Comparing %s values\n" lbl
                         mapM_ sizeOf [minBound .. maxBound]
   where
@@ -71,11 +71,15 @@ withLibrary Theseus k = (k (Proxy @Theseus))
 withLibrary Binary  k = (k (Proxy @B.Binary))
 withLibrary Cereal  k = (k (Proxy @C.Serialize))
 
+type SerialiseAll a = (Theseus a, B.Binary a, C.Serialize a)
+
+type CanTestWith a = (Eq a, Show a, NFData a, SerialiseAll a)
+
 class Serialisation (l :: * -> Constraint) where
 
-  encode :: Proxy l -> OuterStructure -> ByteString
+  encode :: (SerialiseAll a) => Proxy l -> a -> ByteString
 
-  decode :: Proxy l -> ByteString -> Maybe OuterStructure
+  decode :: (SerialiseAll a) => Proxy l -> ByteString -> Maybe a
 
 instance Serialisation Theseus where
 
@@ -83,7 +87,7 @@ instance Serialisation Theseus where
 
   decode _ = either (const Nothing) Just . unravel
 
-encodeDecode :: (Serialisation l) => OuterStructure -> Proxy l -> Maybe OuterStructure
+encodeDecode :: (Serialisation l, SerialiseAll a) => a -> Proxy l -> Maybe a
 encodeDecode a p = decode p (encode p a)
 
 --------------------------------------------------------------------------------
