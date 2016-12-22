@@ -1,5 +1,6 @@
-{-# LANGUAGE ConstraintKinds, FlexibleInstances, KindSignatures,
-             OverloadedStrings, RankNTypes, TypeApplications #-}
+{-# LANGUAGE ConstraintKinds, DeriveAnyClass, DeriveGeneric, FlexibleInstances,
+             KindSignatures, OverloadedStrings, RankNTypes, TypeApplications
+             #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -34,6 +35,7 @@ import           Data.Proxy           (Proxy(..))
 import           Data.Storable.Endian (BigEndian(..), LittleEndian(..))
 import           Data.Word
 import           GHC.Exts             (Constraint)
+import           GHC.Generics         (Generic)
 import           Text.Printf
 
 --------------------------------------------------------------------------------
@@ -41,25 +43,29 @@ import           Text.Printf
 main :: IO ()
 main = do
   testBench $
-    collection "Comparing encoding/decoding speed"
-               (mapM_ (uncurry compareWithValue) samples)
+    collection "Comparing encoding/decoding speed" $ do
+      compareWithValue "Grouped Word*" zeroBenchWord
+      collection "Custom structure"
+                 (mapM_ (uncurry compareWithValue) samples)
 
   putStrLn "" -- blank line
   putStrLn "Comparing encoding size"
-  mapM_ (uncurry compareSizes) samples
+  compareSizes "Grouped Word*" zeroBenchWord
+  mapM_ (uncurry (compareSizes . (++ " custom structure"))) samples
 
 compareWithValue :: (CanTestWith a) => String -> a -> TestBench
-compareWithValue lbl a = compareFunc ("Comparing " ++ lbl ++ " values")
+compareWithValue lbl a = compareFunc (lbl ++ " values")
                                      (`withLibrary` (encodeDecode a))
                                      (testWith (assertEqual "Should decode original value" (Just a))
                                       `mappend` benchNormalForm)
                                      (mapM_ (comp =<< show) [minBound .. maxBound])
 
 compareSizes :: (SerialiseAll a) => String -> a -> IO ()
-compareSizes lbl a = do printf "  Comparing %s values\n" lbl
+compareSizes lbl a = do printf "  %s values\n" lbl
                         mapM_ sizeOf [minBound .. maxBound]
   where
-    sizeOf l = printf "    %-15s %3d bytes\n" (show l) (BS.length (withLibrary l (`encode`a)))
+    sizeOf l = printf "    %-20s %3d bytes\n" (show l)
+                                              (BS.length (withLibrary l (`encode`a)))
 
 --------------------------------------------------------------------------------
 
@@ -185,10 +191,10 @@ instance (NFData a) => NFData (InnerStructure a)
 instance               NFData OuterStructure
 
 samples :: [(String, OuterStructure)]
-samples = [ ("small",             smallOuter)
-          , ("medium",            mediumOuter)
-          , ("large",             largeOuter)
-          , ("large (no String)", largeOuterNoString)
+samples = [ ("Small",             smallOuter)
+          , ("Medium",            mediumOuter)
+          , ("Large",             largeOuter)
+          , ("Large (no String)", largeOuterNoString)
           ]
 
 smallInner :: InnerStructure Word8
@@ -234,3 +240,20 @@ largeOuterNoString = OS False
                         largeInnerNoString
                         (Just "Scaramouche! Scaramouche! Will you do the Fandango?!?\n\
                               \Thunderbolt and lightning, very very frightening me!")
+
+--------------------------------------------------------------------------------
+
+-- | Based upon the comparison benchmark from <https://github.com/erikd/fastpack/blob/master/bench/Bench/Types.hs fastpack>
+--
+--   The only difference is the usage of explicit BE/LE annotations
+--   rather than relying upon a custom encoding/decoding
+--   specification.
+data BenchWord
+    = BenchWord (LittleEndian Word64) (BigEndian Word64)
+                (LittleEndian Word32) (BigEndian Word32)
+                (LittleEndian Word16) (BigEndian Word16)
+                              Word8              Word8
+  deriving (Eq, Show, Generic, NFData, Theseus, B.Binary, C.Serialize)
+
+zeroBenchWord :: BenchWord
+zeroBenchWord = BenchWord 0 0 0 0 0 0 0 0
