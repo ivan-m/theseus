@@ -85,9 +85,9 @@ class Theseus a where
   {-# INLINE decodeValue #-}
 
   -- | Encode a value, starting at the specified offset.
-  encodeValue :: Ptr x -> Offset -> a -> IO ()
-  default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> Offset -> a -> IO ()
-  encodeValue p o = gEncodeValue p o . from
+  encodeValue :: Ptr x -> a -> IO (Ptr x)
+  default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> a -> IO (Ptr x)
+  encodeValue p = gEncodeValue p . from
   {-# INLINE encodeValue #-}
 
 mkRep :: Proxy a -> Proxy (Rep a)
@@ -108,7 +108,10 @@ instance Theseus (T) where {                         \
       ds' = first (+ sizeOf (undefined::(T))) ds };  \
   {-# INLINE decodeValue #-} ;                       \
                                                      \
-  encodeValue = pokeByteOff ;                        \
+  encodeValue ptr a = do { poke (castPtr ptr) a ;    \
+                           pure (plusPtr ptr len) }  \
+    where {                                          \
+      len = sizeOfValue (undefined::(T)) } ;         \
   {-# INLINE encodeValue #-}                         \
 }
 
@@ -165,7 +168,7 @@ instance Theseus ByteString where
                                 pure (substr odata len b, (olen, sz))
   {-# INLINE decodeValue #-}
 
-  encodeValue = pokeByteStringOff
+  encodeValue = pokeAdvanceBS
   {-# INLINE encodeValue #-}
 
 instance Theseus LB.ByteString where
@@ -178,7 +181,7 @@ instance Theseus LB.ByteString where
   decodeValue lc b p o = first LB.fromChunks <$> decodeValue lc b p o
   {-# INLINE decodeValue #-}
 
-  encodeValue ptr o = encodeValue ptr o . LB.toChunks
+  encodeValue ptr = encodeValue ptr . LB.toChunks
   {-# INLINE encodeValue #-}
 
 instance Theseus ()
@@ -260,7 +263,7 @@ class GTheseus f where
 
   gDecodeValue :: LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 
-  gEncodeValue :: Ptr x -> Offset -> f a -> IO ()
+  gEncodeValue :: Ptr x -> f a -> IO (Ptr x)
 
 -- Product type
 instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
@@ -274,8 +277,8 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
                                 first (a :*:) <$> gDecodeValue lc b ptr ds'
   {-# INLINE gDecodeValue #-}
 
-  gEncodeValue ptr o (a :*: b) = gEncodeValue ptr o a
-                                 *> gEncodeValue ptr (o + gSizeOfValue a) b
+  gEncodeValue ptr (a :*: b) = gEncodeValue ptr a >>= \ptr' ->
+                                 gEncodeValue ptr' b
   {-# INLINE gEncodeValue #-}
 
 leftProd :: Proxy (f :*: g) -> Proxy f
@@ -315,7 +318,7 @@ instance (Theseus c) => GTheseus (K1 i c) where
   gDecodeValue lc b ptr ds = first K1 <$> decodeValue lc b ptr ds
   {-# INLINE gDecodeValue #-}
 
-  gEncodeValue ptr o = encodeValue ptr o . unK1
+  gEncodeValue ptr = encodeValue ptr . unK1
   {-# INLINE gEncodeValue #-}
 
 -- Meta-information
@@ -361,14 +364,14 @@ class (GTheseus f) => GConstructors f where
   gConstructorDecode' :: Proxy f -> NumConstruct -> NumConstruct
                          -> LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 
-  gConstructorEncode' :: Proxy f -> NumConstruct -> Ptr x -> Offset -> f a -> IO ()
+  gConstructorEncode' :: Proxy f -> NumConstruct -> Ptr x -> f a -> IO (Ptr x)
 
 gConstructorDecode :: forall f a x. (GConstructors f) => NumConstruct
                       -> LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 gConstructorDecode = gConstructorDecode' (Proxy :: Proxy f) 0
 {-# INLINE gConstructorDecode #-}
 
-gConstructorEncode :: forall f a x. (GConstructors f) => Ptr x -> Offset -> f a -> IO ()
+gConstructorEncode :: forall f a x. (GConstructors f) => Ptr x -> f a -> IO (Ptr x)
 gConstructorEncode = gConstructorEncode' (Proxy :: Proxy f) 0
 {-# INLINE gConstructorEncode #-}
 
@@ -386,8 +389,8 @@ instance (GTheseus f) => GConstructors (M1 C t f) where
       sz' = sz + fSz
   {-# INLINE gConstructorDecode' #-}
 
-  gConstructorEncode' _ c ptr o ca = encodeValue ptr o c
-                                     *> gEncodeValue ptr (o + sizeWord8) (unM1 ca)
+  gConstructorEncode' _ c ptr ca = encodeValue ptr c >>= \ptr' ->
+                                     gEncodeValue ptr' (unM1 ca)
   {-# INLINE gConstructorEncode' #-}
 
 instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
@@ -441,6 +444,14 @@ pokeLengthOff p o x = pokeByteOff p o (fromIntegral x :: Word32)
 
 sizeOfByteString :: ByteString -> Int
 sizeOfByteString s = sizeOfLength + B.length s
+
+pokeAdvanceBS :: Ptr x -> ByteString -> IO (Ptr x)
+pokeAdvanceBS ptr s = do
+  let (fp, o, n) = B.toForeignPtr s
+  ptr' <- encodeValue ptr (fromIntegral n :: Word32)
+  withForeignPtr fp $ \p -> do
+    B.memcpy (castPtr ptr') (plusPtr p o) n
+    pure (plusPtr ptr' n)
 
 pokeByteStringOff :: Ptr a -> Offset -> ByteString -> IO ()
 pokeByteStringOff dptr doff s = do
