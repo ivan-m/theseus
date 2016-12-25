@@ -38,7 +38,7 @@ import           Data.ByteString          (ByteString)
 import qualified Data.ByteString.Internal as B
 
 import Control.Exception  (Exception(..), throwIO, try)
-import Control.Monad      (when)
+import Control.Monad      (void, when)
 import Data.Bool          (bool)
 import Data.Proxy         (Proxy(..))
 import Foreign.ForeignPtr
@@ -50,7 +50,7 @@ import System.IO.Unsafe   (unsafeDupablePerformIO)
 -- | Pull apart a value and convert it to a ByteString.
 ravel :: (Theseus a) => a -> ByteString
 ravel a = B.unsafeCreate sz $ \p ->
-  encodeValue p 0 a
+  void (encodeValue p a)
   where
     sz = sizeOfValue a
 

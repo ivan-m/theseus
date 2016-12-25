@@ -332,7 +332,7 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
   gDecodeValue lc b ptr ds = first M1 <$> gDecodeValue lc b ptr ds
   {-# INLINE gDecodeValue #-}
 
-  gEncodeValue ptr o = gEncodeValue ptr o . unM1
+  gEncodeValue ptr = gEncodeValue ptr . unM1
   {-# INLINE gEncodeValue #-}
 
 -- Constructors without arguments
@@ -346,7 +346,7 @@ instance GTheseus U1 where
   gDecodeValue _ _ _ ds = return (U1, ds)
   {-# INLINE gDecodeValue #-}
 
-  gEncodeValue _ _ _ = return ()
+  gEncodeValue ptr _ = return ptr
   {-# INLINE gEncodeValue #-}
 
 --------------------------------------------------------------------------------
@@ -411,9 +411,9 @@ instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
       cShift = c + cLeft
   {-# INLINE gConstructorDecode' #-}
 
-  gConstructorEncode' pr c ptr o (L1 a) = gConstructorEncode' (leftSum pr) c ptr o a
-  gConstructorEncode' pr c ptr o (R1 b) = let cr = c + gNumConstruct (leftSum pr)
-                                          in gConstructorEncode' (rightSum pr) cr ptr o b
+  gConstructorEncode' pr c ptr (L1 a) = gConstructorEncode' (leftSum pr) c ptr a
+  gConstructorEncode' pr c ptr (R1 b) = let cr = c + gNumConstruct (leftSum pr)
+                                        in gConstructorEncode' (rightSum pr) cr ptr b
   {-# INLINE gConstructorEncode' #-}
 
 unMeta :: Proxy (M1 i t f) -> Proxy f
