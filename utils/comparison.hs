@@ -18,6 +18,7 @@ module Main (main) where
 
 import Data.Theseus
 import Data.Theseus.SampleTypes
+import Data.Theseus.Values      (sizeOfValue)
 
 import qualified Data.Binary     as B
 import qualified Data.Binary.Get as B
@@ -27,22 +28,34 @@ import qualified Data.Serialize  as C
 import Test.HUnit (assertEqual)
 import TestBench
 
-import           Control.DeepSeq      (NFData(..))
-import           Data.ByteString      (ByteString)
-import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
-import           Data.Proxy           (Proxy(..))
-import           Data.Storable.Endian (BigEndian(..), LittleEndian(..))
+import           Control.DeepSeq       (NFData(..))
+import           Data.ByteString       (ByteString)
+import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as CBS
+import qualified Data.ByteString.Lazy  as LBS
+import           Data.Char             (chr)
+import           Data.Proxy            (Proxy(..))
+import           Data.Storable.Endian  (BigEndian(..), LittleEndian(..))
 import           Data.Word
-import           GHC.Exts             (Constraint)
-import           GHC.Generics         (Generic)
+import           GHC.Exts              (Constraint)
+import           GHC.Generics          (Generic)
 import           Text.Printf
 
 --------------------------------------------------------------------------------
 
 main :: IO ()
 main = do
-  testBench $
+  testBench $ do
+    collection "Comparing encoding speed" $
+      compareFunc "Grouped Word* values"
+                  (`withLibrary` (\p -> map (encode p) bws))
+                  (uncurry baseline (head libraries) `mappend` benchNormalForm)
+                  (mapM_ (uncurry comp) (tail libraries))
+    collection "Comparing decoding speed" $
+      compareFunc "Grouped Word* values"
+                  (`withLibrary` (\p -> map (decode p) bss :: [Maybe BenchWord]))
+                  (uncurry baseline (head libraries) `mappend` benchNormalForm)
+                  (mapM_ (uncurry comp) (tail libraries))
     collection "Comparing encoding/decoding speed" $ do
       compareWithValue "Grouped Word*" zeroBenchWord
       collection "Custom structure"
@@ -52,20 +65,22 @@ main = do
   putStrLn "Comparing encoding size"
   compareSizes "Grouped Word*" zeroBenchWord
   mapM_ (uncurry (compareSizes . (++ " custom structure"))) samples
+  where
+    (bws, bss) = genBenchData 100000
 
 compareWithValue :: (CanTestWith a) => String -> a -> TestBench
 compareWithValue lbl a = compareFunc (lbl ++ " values")
                                      (`withLibrary` (encodeDecode a))
                                      (testWith (assertEqual "Should decode original value" (Just a))
                                       `mappend` benchNormalForm)
-                                     (mapM_ (comp =<< show) [minBound .. maxBound])
+                                     (mapM_ (uncurry comp) libraries)
 
 compareSizes :: (SerialiseAll a) => String -> a -> IO ()
 compareSizes lbl a = do printf "  %s values\n" lbl
-                        mapM_ sizeOf [minBound .. maxBound]
+                        mapM_ (uncurry sizeOf) libraries
   where
-    sizeOf l = printf "    %-20s %3d bytes\n" (show l)
-                                              (BS.length (withLibrary l (`encode`a)))
+    sizeOf n l = printf "    %-20s %3d bytes\n" n
+                                                (BS.length (withLibrary l (`encode`a)))
 
 --------------------------------------------------------------------------------
 
@@ -73,6 +88,9 @@ data Library = Theseus
              | Binary
              | Cereal
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
+
+libraries :: [(String, Library)]
+libraries = map ((,) =<< show) [minBound .. maxBound]
 
 withLibrary :: Library -> (forall l. (Serialisation l) => Proxy l -> k) -> k
 withLibrary Theseus k = (k (Proxy @Theseus))
@@ -248,6 +266,9 @@ largeOuterNoString = OS False
 --   The only difference is the usage of explicit BE/LE annotations
 --   rather than relying upon a custom encoding/decoding
 --   specification.
+--
+--   Due to the explicit endianness specifications, all serialisation
+--   libraries should use the same encoding for values of this type.
 data BenchWord
     = BenchWord (LittleEndian Word64) (BigEndian Word64)
                 (LittleEndian Word32) (BigEndian Word32)
@@ -257,3 +278,19 @@ data BenchWord
 
 zeroBenchWord :: BenchWord
 zeroBenchWord = BenchWord 0 0 0 0 0 0 0 0
+
+benchWordSize :: Int
+benchWordSize = sizeOfValue zeroBenchWord
+
+genBenchData :: Int -> ([BenchWord], [ByteString])
+genBenchData count =
+    unzip $ map (\ x -> (mkBenchWord x, mkBenchBS x)) [ 1 .. count ]
+  where
+    mkBenchWord i =
+        BenchWord (fromIntegral $ 137 * i) (fromIntegral $ 231 * i)
+                    (fromIntegral $ 51 * i) (fromIntegral $ 71 * i)
+                    (fromIntegral $ 3 * i) (fromIntegral $ 5 * i)
+                    (fromIntegral i) (fromIntegral $ i + 1)
+
+    -- Number (30 in this case) needs to be the same as the packed size.
+    mkBenchBS i = CBS.replicate benchWordSize (chr i)
