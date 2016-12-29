@@ -60,7 +60,7 @@ unravel :: forall a. (Theseus a) => ByteString -> Either TheseusException a
 unravel bs = unsafeDupablePerformIO . try . withForeignPtr fp $ \p -> do
   lc (minSize (Proxy :: Proxy a))
   let p' = plusPtr p off
-  fst <$> decodeValue lc bs p' 0
+  fst <$> decodeValue lc bs p' (0,0)
   where
     (fp, off, sz) = B.toForeignPtr bs
     lc len = when (len > sz) (throwIO (TheseusException len sz))

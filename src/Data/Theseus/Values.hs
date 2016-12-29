@@ -49,8 +49,12 @@ import qualified Data.Semigroup        as S
 
 type Offset = Int
 
+type MinSize = Int
+
+type DecodeState = (Offset, MinSize)
+
 -- | (offset + required length) (i.e. offset of next argument)
-type LenCheck = Offset -> IO ()
+type LenCheck = MinSize -> IO ()
 
 -- | How to serialise and deserialise an individual value.
 --
@@ -67,17 +71,17 @@ class Theseus a where
 
   -- | The minimum possible size this can take.  This will be
   --   equivalent to 'sizeOfValue' for fixed-size values.
-  minSize :: Proxy a -> Int
-  default minSize :: (GTheseus (Rep a)) => Proxy a -> Int
+  minSize :: Proxy a -> MinSize
+  default minSize :: (GTheseus (Rep a)) => Proxy a -> MinSize
   minSize = gMinSize . mkRep
   {-# INLINE minSize #-}
 
   -- | Decode a value starting at the specified offset.  Returns the
   --   decoded value and the offset for the next value.
-  decodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (a, Offset)
+  decodeValue :: LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (a, DecodeState)
   default decodeValue :: (Generic a, GTheseus (Rep a))
-                         => LenCheck -> ByteString -> Ptr x -> Offset -> IO (a, Offset)
-  decodeValue lc b p o = first to <$> gDecodeValue lc b p o
+                         => LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (a, DecodeState)
+  decodeValue lc b p ds = first to <$> gDecodeValue lc b p ds
   {-# INLINE decodeValue #-}
 
   -- | Encode a value, starting at the specified offset.
@@ -90,22 +94,22 @@ mkRep :: Proxy a -> Proxy (Rep a)
 mkRep _ = Proxy
 {-# INLINE mkRep #-}
 
-#define THESEUS(T)                                          \
-instance Theseus (T) where {                                \
-  sizeOfValue = sizeOf;                                     \
-  {-# INLINE sizeOfValue #-};                               \
-                                                            \
-  minSize _ = sizeOf (undefined::(T));                      \
-  {-# INLINE minSize #-} ;                                  \
-                                                            \
-  decodeValue lc _ p o = do { lc olen ;                     \
-                              (,olen) <$> peekByteOff p o } \
-    where {                                                 \
-      olen = o + sizeOf (undefined::(T)) };                 \
-  {-# INLINE decodeValue #-} ;                              \
-                                                            \
-  encodeValue = pokeByteOff ;                               \
-  {-# INLINE encodeValue #-}                                \
+#define THESEUS(T)                                   \
+instance Theseus (T) where {                         \
+  sizeOfValue = sizeOf;                              \
+  {-# INLINE sizeOfValue #-};                        \
+                                                     \
+  minSize _ = sizeOf (undefined::(T));               \
+  {-# INLINE minSize #-} ;                           \
+                                                     \
+  decodeValue _ _ p ds = (,ds') <$> peekByteOff p o  \
+    where {                                          \
+      o = fst ds ;                                   \
+      ds' = first (+ sizeOf (undefined::(T))) ds };  \
+  {-# INLINE decodeValue #-} ;                       \
+                                                     \
+  encodeValue = pokeByteOff ;                        \
+  {-# INLINE encodeValue #-}                         \
 }
 
 #define THESEUS_E(T)     \
@@ -150,15 +154,15 @@ instance Theseus ByteString where
   minSize _ = sizeOfLength
   {-# INLINE minSize #-}
 
-  decodeValue lc b p o = do let odata = o + sizeOfLength
-                            lc odata
-                            len <- peekLengthOff p o
-                            -- Assume that if we have the length
-                            -- set, then we have the actual
-                            -- ByteString here.
-                            let olen = odata + len
-                            lc olen
-                            pure (substr odata len b, olen)
+  decodeValue lc b p (o,s) = do let odata = o + sizeOfLength
+                                len <- peekLengthOff p o
+                                -- Assume that if we have the length
+                                -- set, then we have the actual
+                                -- ByteString here.
+                                let olen = odata + len
+                                    sz   = s + len
+                                lc sz
+                                pure (substr odata len b, (olen, sz))
   {-# INLINE decodeValue #-}
 
   encodeValue = pokeByteStringOff
@@ -254,7 +258,7 @@ class GTheseus f where
 
   gMinSize :: Proxy f -> Int
 
-  gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
+  gDecodeValue :: LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 
   gEncodeValue :: Ptr x -> Offset -> f a -> IO ()
 
@@ -293,8 +297,8 @@ instance (GConstructors f, GConstructors g) => GTheseus (f :+: g) where
   gMinSize _ = sizeWord8
   {-# INLINE gMinSize #-}
 
-  gDecodeValue lc b ptr o = do (cw,o') <- decodeValue lc b ptr o
-                               gConstructorDecode cw lc b ptr o'
+  gDecodeValue lc b ptr ds = do (cw,ds') <- decodeValue lc b ptr ds
+                                gConstructorDecode cw lc b ptr ds'
   {-# INLINE gDecodeValue #-}
 
   gEncodeValue = gConstructorEncode
@@ -308,7 +312,7 @@ instance (Theseus c) => GTheseus (K1 i c) where
   gMinSize _ = minSize (Proxy :: Proxy c)
   {-# INLINE gMinSize #-}
 
-  gDecodeValue lc b ptr o = first K1 <$> decodeValue lc b ptr o
+  gDecodeValue lc b ptr ds = first K1 <$> decodeValue lc b ptr ds
   {-# INLINE gDecodeValue #-}
 
   gEncodeValue ptr o = encodeValue ptr o . unK1
@@ -322,7 +326,7 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
   gMinSize = gMinSize . unMeta
   {-# INLINE gMinSize #-}
 
-  gDecodeValue lc b ptr o = first M1 <$> gDecodeValue lc b ptr o
+  gDecodeValue lc b ptr ds = first M1 <$> gDecodeValue lc b ptr ds
   {-# INLINE gDecodeValue #-}
 
   gEncodeValue ptr o = gEncodeValue ptr o . unM1
@@ -336,7 +340,7 @@ instance GTheseus U1 where
   gMinSize _ = 0
   {-# INLINE gMinSize #-}
 
-  gDecodeValue _ _ _ o = return (U1, o)
+  gDecodeValue _ _ _ ds = return (U1, ds)
   {-# INLINE gDecodeValue #-}
 
   gEncodeValue _ _ _ = return ()
@@ -355,12 +359,12 @@ class (GTheseus f) => GConstructors f where
   -- | First NumConstruct is for the constructor we're currently up
   --   to; second is for the one we're searching for.
   gConstructorDecode' :: Proxy f -> NumConstruct -> NumConstruct
-                         -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
+                         -> LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 
   gConstructorEncode' :: Proxy f -> NumConstruct -> Ptr x -> Offset -> f a -> IO ()
 
 gConstructorDecode :: forall f a x. (GConstructors f) => NumConstruct
-                      -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
+                      -> LenCheck -> ByteString -> Ptr x -> DecodeState -> IO (f a, DecodeState)
 gConstructorDecode = gConstructorDecode' (Proxy :: Proxy f) 0
 {-# INLINE gConstructorDecode #-}
 
@@ -375,7 +379,11 @@ instance (GTheseus f) => GConstructors (M1 C t f) where
   gNumConstruct _ = 1
   {-# INLINE gNumConstruct #-}
 
-  gConstructorDecode' _ _ _ = gDecodeValue
+  gConstructorDecode' _ _ _ lc b ptr (o,sz) = lc sz'
+                                              >> gDecodeValue lc b ptr (o, sz')
+    where
+      fSz = gMinSize (Proxy :: Proxy f)
+      sz' = sz + fSz
   {-# INLINE gConstructorDecode' #-}
 
   gConstructorEncode' _ c ptr o ca = encodeValue ptr o c
@@ -390,10 +398,10 @@ instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
   gNumConstruct p = gNumConstruct (leftSum p) + gNumConstruct (rightSum p)
   {-# INLINE gNumConstruct #-}
 
-  gConstructorDecode' pr c cw lc b ptr o
+  gConstructorDecode' pr c cw lc b ptr ds
     = if cw < cShift
-        then first L1 <$> gConstructorDecode' prLeft        c      cw lc b ptr o
-        else first R1 <$> gConstructorDecode' (rightSum pr) cShift cw lc b ptr o
+        then first L1 <$> gConstructorDecode' prLeft        c      cw lc b ptr ds
+        else first R1 <$> gConstructorDecode' (rightSum pr) cShift cw lc b ptr ds
     where
       prLeft = leftSum pr
       cLeft = gNumConstruct prLeft
