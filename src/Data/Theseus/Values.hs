@@ -270,8 +270,8 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
   gMinSize p = gMinSize (leftProd p) + gMinSize (rightProd p)
   {-# INLINE gMinSize #-}
 
-  gDecodeValue lc b ptr o = do (a,o') <- gDecodeValue lc b ptr o
-                               first (a :*:) <$> gDecodeValue lc b ptr o'
+  gDecodeValue lc b ptr ds = do (a,ds') <- gDecodeValue lc b ptr ds
+                                first (a :*:) <$> gDecodeValue lc b ptr ds'
   {-# INLINE gDecodeValue #-}
 
   gEncodeValue ptr o (a :*: b) = gEncodeValue ptr o a
