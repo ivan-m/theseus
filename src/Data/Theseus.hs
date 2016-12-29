@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 {- |
    Module      : Data.Theseus
    Description : Encode and decode values
@@ -35,9 +37,10 @@ import Data.Theseus.Values
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString.Internal as B
 
-import Control.Exception  (Exception (..), throwIO, try)
+import Control.Exception  (Exception(..), throwIO, try)
 import Control.Monad      (when)
 import Data.Bool          (bool)
+import Data.Proxy         (Proxy(..))
 import Foreign.ForeignPtr
 import Foreign.Ptr
 import System.IO.Unsafe   (unsafeDupablePerformIO)
@@ -53,10 +56,11 @@ ravel a = B.unsafeCreate sz $ \p ->
 
 -- | Separate out the individual bytes from a ByteString and try to
 --   construct a value out of it.
-unravel :: (Theseus a) => ByteString -> Either TheseusException a
-unravel bs = unsafeDupablePerformIO . try . withForeignPtr fp $ \p ->
+unravel :: forall a. (Theseus a) => ByteString -> Either TheseusException a
+unravel bs = unsafeDupablePerformIO . try . withForeignPtr fp $ \p -> do
+  lc (minSize (Proxy :: Proxy a))
   let p' = plusPtr p off
-  in fst <$> decodeValue lc bs p' 0
+  fst <$> decodeValue lc bs p' 0
   where
     (fp, off, sz) = B.toForeignPtr bs
     lc len = when (len > sz) (throwIO (TheseusException len sz))
