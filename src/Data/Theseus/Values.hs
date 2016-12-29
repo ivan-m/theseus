@@ -301,22 +301,22 @@ type NumConstruct = Word8
 class (GTheseus f) => GConstructors f where
   gConstructSize :: f a -> Int
 
-  gNumConstruct :: Proxy (f a) -> NumConstruct
+  gNumConstruct :: Proxy f -> NumConstruct
 
   -- | First NumConstruct is for the constructor we're currently up
   --   to; second is for the one we're searching for.
-  gConstructorDecode' :: Proxy (f a) -> NumConstruct -> NumConstruct
+  gConstructorDecode' :: Proxy f -> NumConstruct -> NumConstruct
                          -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
 
-  gConstructorEncode' :: Proxy (f a) -> NumConstruct -> Ptr x -> Offset -> f a -> IO ()
+  gConstructorEncode' :: Proxy f -> NumConstruct -> Ptr x -> Offset -> f a -> IO ()
 
 gConstructorDecode :: forall f a x. (GConstructors f) => NumConstruct
                       -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
-gConstructorDecode = gConstructorDecode' (Proxy :: Proxy (f a)) 0
+gConstructorDecode = gConstructorDecode' (Proxy :: Proxy f) 0
 {-# INLINE gConstructorDecode #-}
 
 gConstructorEncode :: forall f a x. (GConstructors f) => Ptr x -> Offset -> f a -> IO ()
-gConstructorEncode = gConstructorEncode' (Proxy :: Proxy (f a)) 0
+gConstructorEncode = gConstructorEncode' (Proxy :: Proxy f) 0
 {-# INLINE gConstructorEncode #-}
 
 instance (GTheseus f) => GConstructors (M1 C t f) where
@@ -356,15 +356,15 @@ instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
                                           in gConstructorEncode' (rightSum pr) cr ptr o b
   {-# INLINE gConstructorEncode' #-}
 
-unMeta :: Proxy ((M1 i t f) a) -> Proxy (f a)
+unMeta :: Proxy (M1 i t f) -> Proxy f
 unMeta _ = Proxy
 {-# INLINE unMeta #-}
 
-leftSum :: Proxy ((f :+: g) a) -> Proxy (f a)
+leftSum :: Proxy (f :+: g) -> Proxy f
 leftSum _ = Proxy
 {-# INLINE leftSum #-}
 
-rightSum :: Proxy ((f :+: g) a) -> Proxy (g a)
+rightSum :: Proxy (f :+: g) -> Proxy g
 rightSum _ = Proxy
 {-# INLINE rightSum #-}
 
