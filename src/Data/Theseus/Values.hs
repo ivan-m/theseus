@@ -65,6 +65,13 @@ class Theseus a where
   sizeOfValue = gSizeOfValue . from
   {-# INLINE sizeOfValue #-}
 
+  -- | The minimum possible size this can take.  This will be
+  --   equivalent to 'sizeOfValue' for fixed-size values.
+  minSize :: Proxy a -> Int
+  default minSize :: (GTheseus (Rep a)) => Proxy a -> Int
+  minSize = gMinSize . mkRep
+  {-# INLINE minSize #-}
+
   -- | Decode a value starting at the specified offset.  Returns the
   --   decoded value and the offset for the next value.
   decodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (a, Offset)
@@ -79,10 +86,17 @@ class Theseus a where
   encodeValue p o = gEncodeValue p o . from
   {-# INLINE encodeValue #-}
 
+mkRep :: Proxy a -> Proxy (Rep a)
+mkRep _ = Proxy
+{-# INLINE mkRep #-}
+
 #define THESEUS(T)                                          \
 instance Theseus (T) where {                                \
   sizeOfValue = sizeOf;                                     \
   {-# INLINE sizeOfValue #-};                               \
+                                                            \
+  minSize _ = sizeOf (undefined::(T));                      \
+  {-# INLINE minSize #-} ;                                  \
                                                             \
   decodeValue lc _ p o = do { lc olen ;                     \
                               (,olen) <$> peekByteOff p o } \
@@ -133,6 +147,9 @@ instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
   {-# INLINE sizeOfValue #-}
 
+  minSize _ = sizeOfLength
+  {-# INLINE minSize #-}
+
   decodeValue lc b p o = do let odata = o + sizeOfLength
                             lc odata
                             len <- peekLengthOff p o
@@ -150,6 +167,9 @@ instance Theseus ByteString where
 instance Theseus LB.ByteString where
   sizeOfValue = sizeOfValue . LB.toChunks
   {-# INLINE sizeOfValue #-}
+
+  minSize _ = minSize (Proxy :: Proxy [ByteString])
+  {-# INLINE minSize #-}
 
   decodeValue lc b p o = first LB.fromChunks <$> decodeValue lc b p o
   {-# INLINE decodeValue #-}
@@ -232,6 +252,8 @@ instance Theseus (Proxy a)
 class GTheseus f where
   gSizeOfValue :: f a -> Int
 
+  gMinSize :: Proxy f -> Int
+
   gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
 
   gEncodeValue :: Ptr x -> Offset -> f a -> IO ()
@@ -241,6 +263,9 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
   gSizeOfValue (a :*: b) = gSizeOfValue a + gSizeOfValue b
   {-# INLINE gSizeOfValue #-}
 
+  gMinSize p = gMinSize (leftProd p) + gMinSize (rightProd p)
+  {-# INLINE gMinSize #-}
+
   gDecodeValue lc b ptr o = do (a,o') <- gDecodeValue lc b ptr o
                                first (a :*:) <$> gDecodeValue lc b ptr o'
   {-# INLINE gDecodeValue #-}
@@ -249,9 +274,24 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
                                  *> gEncodeValue ptr (o + gSizeOfValue a) b
   {-# INLINE gEncodeValue #-}
 
+leftProd :: Proxy (f :*: g) -> Proxy f
+leftProd _ = Proxy
+{-# INLINE leftProd #-}
+
+rightProd :: Proxy (f :*: g) -> Proxy g
+rightProd _ = Proxy
+{-# INLINE rightProd #-}
+
 instance (GConstructors f, GConstructors g) => GTheseus (f :+: g) where
   gSizeOfValue = gConstructSize
   {-# INLINE gSizeOfValue #-}
+
+  -- | This isn't quite correct: the minimum size is actually the
+  --   minimum size of all the values contained within all the
+  --   possible constructors, but this will make it easier to deal
+  --   with future checks.
+  gMinSize _ = sizeWord8
+  {-# INLINE gMinSize #-}
 
   gDecodeValue lc b ptr o = do (cw,o') <- decodeValue lc b ptr o
                                gConstructorDecode cw lc b ptr o'
@@ -265,6 +305,9 @@ instance (Theseus c) => GTheseus (K1 i c) where
   gSizeOfValue = sizeOfValue . unK1
   {-# INLINE gSizeOfValue #-}
 
+  gMinSize _ = minSize (Proxy :: Proxy c)
+  {-# INLINE gMinSize #-}
+
   gDecodeValue lc b ptr o = first K1 <$> decodeValue lc b ptr o
   {-# INLINE gDecodeValue #-}
 
@@ -276,6 +319,9 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
   gSizeOfValue = gSizeOfValue . unM1
   {-# INLINE gSizeOfValue #-}
 
+  gMinSize = gMinSize . unMeta
+  {-# INLINE gMinSize #-}
+
   gDecodeValue lc b ptr o = first M1 <$> gDecodeValue lc b ptr o
   {-# INLINE gDecodeValue #-}
 
@@ -286,6 +332,9 @@ instance (GTheseus f) => GTheseus (M1 i t f) where
 instance GTheseus U1 where
   gSizeOfValue = const 0
   {-# INLINE gSizeOfValue #-}
+
+  gMinSize _ = 0
+  {-# INLINE gMinSize #-}
 
   gDecodeValue _ _ _ o = return (U1, o)
   {-# INLINE gDecodeValue #-}
