@@ -47,8 +47,10 @@ import qualified Data.Semigroup        as S
 
 --------------------------------------------------------------------------------
 
+type Offset = Int
+
 -- | (offset + required length) (i.e. offset of next argument)
-type LenCheck = Int -> IO ()
+type LenCheck = Offset -> IO ()
 
 -- | How to serialise and deserialise an individual value.
 --
@@ -65,15 +67,15 @@ class Theseus a where
 
   -- | Decode a value starting at the specified offset.  Returns the
   --   decoded value and the offset for the next value.
-  decodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
+  decodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (a, Offset)
   default decodeValue :: (Generic a, GTheseus (Rep a))
-                         => LenCheck -> ByteString -> Ptr x -> Int -> IO (a, Int)
+                         => LenCheck -> ByteString -> Ptr x -> Offset -> IO (a, Offset)
   decodeValue lc b p o = first to <$> gDecodeValue lc b p o
   {-# INLINE decodeValue #-}
 
   -- | Encode a value, starting at the specified offset.
-  encodeValue :: Ptr x -> Int -> a -> IO ()
-  default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> Int -> a -> IO ()
+  encodeValue :: Ptr x -> Offset -> a -> IO ()
+  default encodeValue :: (Generic a, GTheseus (Rep a)) => Ptr x -> Offset -> a -> IO ()
   encodeValue p o = gEncodeValue p o . from
   {-# INLINE encodeValue #-}
 
@@ -230,9 +232,9 @@ instance Theseus (Proxy a)
 class GTheseus f where
   gSizeOfValue :: f a -> Int
 
-  gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+  gDecodeValue :: LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
 
-  gEncodeValue :: Ptr x -> Int -> f a -> IO ()
+  gEncodeValue :: Ptr x -> Offset -> f a -> IO ()
 
 -- Product type
 instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
@@ -304,16 +306,16 @@ class (GTheseus f) => GConstructors f where
   -- | First NumConstruct is for the constructor we're currently up
   --   to; second is for the one we're searching for.
   gConstructorDecode' :: Proxy (f a) -> NumConstruct -> NumConstruct
-                         -> LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+                         -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
 
-  gConstructorEncode' :: Proxy (f a) -> NumConstruct -> Ptr x -> Int -> f a -> IO ()
+  gConstructorEncode' :: Proxy (f a) -> NumConstruct -> Ptr x -> Offset -> f a -> IO ()
 
 gConstructorDecode :: forall f a x. (GConstructors f) => NumConstruct
-                      -> LenCheck -> ByteString -> Ptr x -> Int -> IO (f a, Int)
+                      -> LenCheck -> ByteString -> Ptr x -> Offset -> IO (f a, Offset)
 gConstructorDecode = gConstructorDecode' (Proxy :: Proxy (f a)) 0
 {-# INLINE gConstructorDecode #-}
 
-gConstructorEncode :: forall f a x. (GConstructors f) => Ptr x -> Int -> f a -> IO ()
+gConstructorEncode :: forall f a x. (GConstructors f) => Ptr x -> Offset -> f a -> IO ()
 gConstructorEncode = gConstructorEncode' (Proxy :: Proxy (f a)) 0
 {-# INLINE gConstructorEncode #-}
 
@@ -374,16 +376,16 @@ sizeOfLength = sizeOf (0::Word32)
 
 -- Off is short for Offset
 
-peekLengthOff :: Ptr a -> Int -> IO Int
+peekLengthOff :: Ptr a -> Offset -> IO Offset
 peekLengthOff p o = fromIntegral <$> (peekByteOff p o :: IO Word32)
 
-pokeLengthOff :: Ptr a -> Int -> Int -> IO ()
+pokeLengthOff :: Ptr a -> Offset -> Offset -> IO ()
 pokeLengthOff p o x = pokeByteOff p o (fromIntegral x :: Word32)
 
 sizeOfByteString :: ByteString -> Int
 sizeOfByteString s = sizeOfLength + B.length s
 
-pokeByteStringOff :: Ptr a -> Int -> ByteString -> IO ()
+pokeByteStringOff :: Ptr a -> Offset -> ByteString -> IO ()
 pokeByteStringOff dptr doff s = do
   let (fp, o, n) = B.toForeignPtr s
   pokeLengthOff dptr doff n
@@ -391,7 +393,7 @@ pokeByteStringOff dptr doff s = do
     moveArray (plusPtr dptr (doff + sizeOfLength) :: Ptr Word8) (plusPtr p o) n
 
 -- | Takes offset and size
-substr :: Int -> Int -> ByteString -> ByteString
+substr :: Offset -> Offset -> ByteString -> ByteString
 substr off sz s
   | sz == 0   = B.empty
   | otherwise = B.take sz . B.drop off $ s
