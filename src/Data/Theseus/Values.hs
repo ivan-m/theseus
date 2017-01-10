@@ -274,8 +274,9 @@ instance (GTheseus f, GTheseus g) => GTheseus (f :*: g) where
                                 first (a :*:) <$> gDecodeValue lc b ptr ds'
   {-# INLINE gDecodeValue #-}
 
-  gEncodeValue ptr o (a :*: b) = gEncodeValue ptr o a
-                                 *> gEncodeValue ptr (o + gSizeOfValue a) b
+  gEncodeValue ptr o (a :*: b) = let o' = (o + gSizeOfValue a)
+                                 in o' `seq` gEncodeValue ptr o a
+                                             *> gEncodeValue ptr o' b
   {-# INLINE gEncodeValue #-}
 
 leftProd :: Proxy (f :*: g) -> Proxy f
@@ -386,8 +387,9 @@ instance (GTheseus f) => GConstructors (M1 C t f) where
       sz' = sz + fSz
   {-# INLINE gConstructorDecode' #-}
 
-  gConstructorEncode' _ c ptr o ca = encodeValue ptr o c
-                                     *> gEncodeValue ptr (o + sizeWord8) (unM1 ca)
+  gConstructorEncode' _ c ptr o ca = let o' = o + sizeWord8
+                                     in o' `seq` encodeValue ptr o c
+                                                 *> gEncodeValue ptr o' (unM1 ca)
   {-# INLINE gConstructorEncode' #-}
 
 instance (GConstructors f, GConstructors g) => GConstructors (f :+: g) where
