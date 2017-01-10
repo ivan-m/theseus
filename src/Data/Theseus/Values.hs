@@ -45,6 +45,8 @@ import           Data.Monoid           (All, Alt, Any, Dual, First, Last,
 import           Data.Proxy            (Proxy(..))
 import qualified Data.Semigroup        as S
 
+#include "MachDeps.h"
+
 --------------------------------------------------------------------------------
 
 type Offset = Int
@@ -112,30 +114,25 @@ instance Theseus (T) where {                         \
   {-# INLINE encodeValue #-}                         \
 }
 
-#define THESEUS_E(T)     \
-THESEUS(T);              \
-THESEUS(LittleEndian T); \
-THESEUS(BigEndian T);    \
-
 THESEUS(Int8)
 
-THESEUS_E(Int16)
+THESEUS(Int16)
 
-THESEUS_E(Int32)
+THESEUS(Int32)
 
-THESEUS_E(Int64)
+THESEUS(Int64)
 
 THESEUS(Word8)
 
-THESEUS_E(Word16)
+THESEUS(Word16)
 
-THESEUS_E(Word32)
+THESEUS(Word32)
 
-THESEUS_E(Word64)
+THESEUS(Word64)
 
-THESEUS_E(Double)
+THESEUS(Double)
 
-THESEUS_E(Float)
+THESEUS(Float)
 
 THESEUS(Char)
 
@@ -146,6 +143,68 @@ THESEUS(FunPtr a)
 THESEUS(WordPtr)
 
 THESEUS(IntPtr)
+
+instance (Theseus a, Storable a
+#ifndef WORDS_BIGENDIAN
+         , HasBigEndian a
+#endif
+         ) => Theseus (BigEndian a) where
+  sizeOfValue = sizeOfValue . getBigEndian
+  {-# INLINE sizeOfValue #-}
+
+  minSize _ = minSize (Proxy :: Proxy a)
+  {-# INLINE minSize #-}
+
+  decodeValue _lc _b p ds =
+#ifdef WORDS_BIGENDIAN
+    -- Can use native decoding
+    first BE <$> decodeValue _lc _b p ds
+#else
+    (,ds') <$> peekByteOff p o
+    where
+      o = fst ds
+      -- Assume that it's a simple fixed-width type
+      ds' = first (+ sizeOf (undefined::a)) ds
+#endif
+  {-# INLINE decodeValue #-}
+
+  encodeValue p o = pokeByteOff p o
+#ifdef WORDS_BIGENDIAN
+                    -- Use native encoding
+                    . getBigEndian
+#endif
+  {-# INLINE encodeValue #-}
+
+instance (Theseus a, Storable a
+#ifdef WORDS_BIGENDIAN
+         , HasLittleEndian a
+#endif
+         ) => Theseus (LittleEndian a) where
+  sizeOfValue = sizeOfValue . getLittleEndian
+  {-# INLINE sizeOfValue #-}
+
+  minSize _ = minSize (Proxy :: Proxy a)
+  {-# INLINE minSize #-}
+
+  decodeValue _lc _b p ds =
+#ifdef WORDS_BIGENDIAN
+    (,ds') <$> peekByteOff p o
+    where
+      o = fst ds
+      -- Assume that it's a simple fixed-width type
+      ds' = first (+ sizeOf (undefined::a)) ds
+#else
+    -- Can use native decoding
+    first LE <$> decodeValue _lc _b p ds
+#endif
+  {-# INLINE decodeValue #-}
+
+  encodeValue p o = pokeByteOff p o
+#ifndef WORDS_BIGENDIAN
+                    -- Use native encoding
+                    . getLittleEndian
+#endif
+  {-# INLINE encodeValue #-}
 
 instance Theseus ByteString where
   sizeOfValue = sizeOfByteString
