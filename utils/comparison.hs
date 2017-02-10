@@ -49,11 +49,11 @@ main = do
     collection "Comparing encoding speed" $
       compareFuncAll "Grouped Word* values"
                      (`withLibrary` (\p -> map (encode p) bws))
-                     (noBenchmarks `mappend` weigh)
+                     normalForm
     collection "Comparing decoding speed" $
       compareFuncAll "Grouped Word* values"
                      (`withLibrary` (\p -> map (decode p) bss :: [Maybe BenchWord]))
-                     (noBenchmarks `mappend` weigh)
+                     normalForm
     collection "Comparing encoding/decoding speed" $ do
       compareWithValue "Grouped Word*" zeroBenchWord
       collection "Custom structure"
@@ -70,7 +70,7 @@ compareWithValue :: (CanTestWith a) => String -> a -> TestBench
 compareWithValue lbl a = compareFuncAll' (lbl ++ " values")
                                          (`withLibrary` (encodeDecode a))
                                          (testWith (assertEqual "Should decode original value" (Just a))
-                                          `mappend` (noBenchmarks `mappend` weigh))
+                                          `mappend` normalForm)
 
 compareSizes :: (SerialiseAll a) => String -> a -> IO ()
 compareSizes lbl a = do printf "  %s values\n" lbl
