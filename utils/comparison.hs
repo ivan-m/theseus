@@ -47,15 +47,13 @@ main :: IO ()
 main = do
   testBench $ do
     collection "Comparing encoding speed" $
-      compareFunc "Grouped Word* values"
-                  (`withLibrary` (\p -> map (encode p) bws))
-                  (uncurry baseline (head libraries) `mappend` benchNormalForm)
-                  (mapM_ (uncurry comp) (tail libraries))
+      compareFuncAll "Grouped Word* values"
+                     (`withLibrary` (\p -> map (encode p) bws))
+                     (noBenchmarks `mappend` weigh)
     collection "Comparing decoding speed" $
-      compareFunc "Grouped Word* values"
-                  (`withLibrary` (\p -> map (decode p) bss :: [Maybe BenchWord]))
-                  (uncurry baseline (head libraries) `mappend` benchNormalForm)
-                  (mapM_ (uncurry comp) (tail libraries))
+      compareFuncAll "Grouped Word* values"
+                     (`withLibrary` (\p -> map (decode p) bss :: [Maybe BenchWord]))
+                     (noBenchmarks `mappend` weigh)
     collection "Comparing encoding/decoding speed" $ do
       compareWithValue "Grouped Word*" zeroBenchWord
       collection "Custom structure"
@@ -66,18 +64,17 @@ main = do
   compareSizes "Grouped Word*" zeroBenchWord
   mapM_ (uncurry (compareSizes . (++ " custom structure"))) samples
   where
-    (bws, bss) = genBenchData 100000
+    (bws, bss) = genBenchData 1000000
 
 compareWithValue :: (CanTestWith a) => String -> a -> TestBench
-compareWithValue lbl a = compareFunc (lbl ++ " values")
-                                     (`withLibrary` (encodeDecode a))
-                                     (testWith (assertEqual "Should decode original value" (Just a))
-                                      `mappend` benchNormalForm)
-                                     (mapM_ (uncurry comp) libraries)
+compareWithValue lbl a = compareFuncAll' (lbl ++ " values")
+                                         (`withLibrary` (encodeDecode a))
+                                         (testWith (assertEqual "Should decode original value" (Just a))
+                                          `mappend` (noBenchmarks `mappend` weigh))
 
 compareSizes :: (SerialiseAll a) => String -> a -> IO ()
 compareSizes lbl a = do printf "  %s values\n" lbl
-                        mapM_ (uncurry sizeOf) libraries
+                        mapM_ (sizeOf =<< show) libraries
   where
     sizeOf n l = printf "    %-20s %3d bytes\n" n
                                                 (BS.length (withLibrary l (`encode`a)))
@@ -89,8 +86,8 @@ data Library = Theseus
              | Cereal
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
-libraries :: [(String, Library)]
-libraries = map ((,) =<< show) [minBound .. maxBound]
+libraries :: [Library]
+libraries = [minBound .. maxBound]
 
 withLibrary :: Library -> (forall l. (Serialisation l) => Proxy l -> k) -> k
 withLibrary Theseus k = (k (Proxy @Theseus))
